@@ -2,7 +2,8 @@ import copy
 import os
 import unittest
 from unittest.mock import patch
-from bot.menu import load, render, validate, prices
+from bot.menu import render, validate, prices
+from support import sample_menu as load
 from bot.telegram_bot import Bot, fingerprint, publish
 
 
@@ -50,6 +51,7 @@ class BotTests(unittest.TestCase):
     def setUp(self):
         with patch.dict(os.environ, TELEGRAM_BOT_TOKEN='test', TELEGRAM_ADMIN_IDS='123'):
             self.bot = Bot()
+        self.bot.messages = {}
         self.bot.api = lambda *args: None
         menu = load()
         self.bot.sessions[123] = {'menu': menu, 'base': fingerprint(menu)}

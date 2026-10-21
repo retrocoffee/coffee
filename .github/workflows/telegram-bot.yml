@@ -13,7 +13,7 @@ permissions:
   actions: write
 concurrency:
   group: telegram-menu-admin
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 jobs:
   bot:
     runs-on: ubuntu-latest

@@ -11,9 +11,17 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from bot.bulk import MAX_BYTES, apply_csv, export_csv
 from bot.menu import MENU_PATH, encode, load, prices, validate
 
 LOG = logging.getLogger('menu-bot')
+
+
+class TelegramError(RuntimeError):
+    def __init__(self, code, description=''):
+        super().__init__(f'Telegram HTTP {code}')
+        self.code = code
+        self.not_modified = 'message is not modified' in description.lower()
 
 
 def git(*args):
@@ -69,34 +77,108 @@ class Bot:
             raise ValueError('TELEGRAM_ADMIN_IDS must not be empty')
         self.sessions = {}
         self.callbacks = {}
+        self.message_file = Path('.bot-state/messages.json')
+        try:
+            self.messages = json.loads(self.message_file.read_text())
+        except (OSError, ValueError):
+            self.messages = {}
+        self.documents = {}
         self.running = True
 
     def api(self, method, payload):
+        return self.telegram_request(method, json.dumps(payload).encode(), 'application/json')
+
+    def telegram_request(self, method, data, content_type):
         request = urllib.request.Request(
             f'https://api.telegram.org/bot{self.token}/{method}',
-            data=json.dumps(payload).encode(), headers={'Content-Type': 'application/json'})
+            data=data, headers={'Content-Type': content_type})
         try:
             with urllib.request.urlopen(request, timeout=40) as response:
                 data = json.load(response)
             if not data.get('ok'):
-                raise RuntimeError('Telegram rejected request')
+                raise TelegramError(data.get('error_code', 0), data.get('description', ''))
             return data['result']
         except urllib.error.HTTPError as error:
             # Do not print exception URLs: Telegram embeds its token in the URL.
-            raise RuntimeError(f'Telegram HTTP {error.code}') from None
+            try:
+                description = json.loads(error.read()).get('description', '')
+            except (ValueError, OSError):
+                description = ''
+            raise TelegramError(error.code, description) from None
         except urllib.error.URLError:
             raise RuntimeError('Telegram network error') from None
 
     def send(self, uid, text, buttons=()):
-        # Expire previous keyboards, preventing accidental replay of a Save button.
-        self.callbacks = {k: v for k, v in self.callbacks.items() if v[0] != uid}
+        # Edit the current screen; activate its new callbacks only after delivery.
+        callbacks = {}
         rows = []
         for label, action in buttons:
             key = secrets.token_hex(10)
-            self.callbacks[key] = (uid, action)
+            callbacks[key] = (uid, action)
             rows.append([{'text': label[:64], 'callback_data': key}])
-        self.api('sendMessage', {'chat_id': uid, 'text': text[:4000],
-                                'reply_markup': {'inline_keyboard': rows}})
+        payload = {'chat_id': uid, 'text': text[:4000], 'reply_markup': {'inline_keyboard': rows}}
+        previous = self.messages.get(str(uid))
+        if previous:
+            try:
+                self.api('editMessageText', dict(payload, message_id=previous))
+            except TelegramError as error:
+                if error.not_modified:
+                    pass
+                elif error.code == 400:
+                    result = self.api('sendMessage', payload)
+                    self.messages[str(uid)] = result['message_id']
+                    self.delete_message(uid, previous)
+                else:
+                    raise
+        else:
+            result = self.api('sendMessage', payload)
+            if result:
+                self.messages[str(uid)] = result['message_id']
+        self.callbacks = {k: v for k, v in self.callbacks.items() if v[0] != uid}
+        self.callbacks.update(callbacks)
+        self.message_file.parent.mkdir(exist_ok=True)
+        self.message_file.write_text(json.dumps(self.messages))
+        for message_id in self.documents.pop(uid, []):
+            self.delete_message(uid, message_id)
+
+    def delete_message(self, uid, message_id):
+        try:
+            self.api('deleteMessage', {'chat_id': uid, 'message_id': message_id})
+        except RuntimeError:
+            pass  # Already deleted or outside Telegram's deletion window.
+
+    def send_template(self, uid):
+        state = self.sessions[uid]
+        _, scope = state['bulk']
+        content = export_csv(state['menu'], scope).encode('utf-8')
+        boundary = secrets.token_hex(16)
+        data = (f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{uid}\r\n'
+                f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="retrocoffe-menu.csv"\r\n'
+                'Content-Type: text/csv; charset=utf-8\r\n\r\n').encode()
+        data += content + f'\r\n--{boundary}--\r\n'.encode()
+        result = self.telegram_request('sendDocument', data, f'multipart/form-data; boundary={boundary}')
+        self.documents.setdefault(uid, []).append(result['message_id'])
+
+    def read_document(self, document):
+        if document.get('file_size', MAX_BYTES + 1) > MAX_BYTES:
+            raise ValueError('Максимальный размер CSV — 512 КБ.')
+        if Path(document.get('file_name', '')).suffix.lower() not in ('.csv', '.tsv', '.txt'):
+            raise ValueError('Отправьте CSV-файл из шаблона (UTF-8).')
+        info = self.api('getFile', {'file_id': document['file_id']})
+        path = info['file_path']
+        if '..' in path or not all(c.isalnum() or c in '_./-' for c in path):
+            raise ValueError('Не удалось получить файл Telegram.')
+        try:
+            with urllib.request.urlopen(f'https://api.telegram.org/file/bot{self.token}/{path}', timeout=40) as response:
+                content = response.read(MAX_BYTES + 1)
+        except (urllib.error.URLError, OSError):
+            raise RuntimeError('Telegram file download failed') from None
+        if len(content) > MAX_BYTES:
+            raise ValueError('Максимальный размер CSV — 512 КБ.')
+        try:
+            return content.decode('utf-8-sig')
+        except UnicodeError:
+            raise ValueError('Сохраните файл в кодировке CSV UTF-8 и отправьте заново.') from None
 
     def home(self, uid, page=0):
         git('fetch', 'origin', 'main')
@@ -107,7 +189,8 @@ class Bot:
         buttons = [(('🙈 ' if s['hidden'] else '') + s['name'], ('section', s['id'])) for s in sections[page*15:(page+1)*15]]
         if page: buttons.append(('← Предыдущие разделы', ('home', page-1)))
         if (page+1)*15 < len(sections): buttons.append(('Следующие разделы →', ('home', page+1)))
-        buttons += [('＋ Раздел', ('input', 'section-add')), ('🕘 История меню', ('history', 0)),
+        buttons += [('📥 Массовая загрузка', ('bulk-mode',)),
+                    ('＋ Раздел', ('input', 'section-add')), ('🕘 История меню', ('history', 0)),
                     ('↻ Опубликовать повторно', ('deploy',))]
         self.send(uid, 'Управление меню\nВыберите раздел. 🙈 — скрыт с сайта.\n/start — обновить меню, /cancel — отменить ввод.', buttons)
 
@@ -128,6 +211,7 @@ class Bot:
         if page: buttons.append(('← Предыдущие', ('group', sid, gid, page-1)))
         if (page+1)*10 < len(items): buttons.append(('Следующие →', ('group', sid, gid, page+1)))
         buttons += [('＋ Позиция', ('input', 'item-add', sid, gid)),
+                    ('📥 Массовая загрузка группы', ('bulk-mode', sid, gid)),
                     ('✎ Объёмы группы', ('input', 'columns', sid, gid)),
                     ('← Раздел', ('section', sid))]
         self.send(uid, g['caption'] + '\nОбъёмы: ' + ('; '.join(g['columns']) or 'не указаны'), buttons)
@@ -149,12 +233,54 @@ class Bot:
         i = next(i for i in g['items'] if i['id'] == iid) if iid else None
         return s,g,i
 
-    def preview(self, uid, menu, description):
+    def preview(self, uid, menu, description, changes=None):
         validate(menu)
         self.sessions[uid]['draft'] = (menu, description)
         self.sessions[uid].pop('input', None)
+        self.sessions[uid]['bulk_changes'] = changes or []
+        self.show_preview(uid)
+
+    def show_preview(self, uid):
+        state = self.sessions[uid]
+        _, description = state['draft']
+        buttons = [('✓ Сохранить', ('save',))]
+        if state.get('bulk_changes'):
+            buttons.insert(0, ('📋 Все изменения', ('bulk-preview', 0)))
+        buttons.append(('Отмена', ('home',)))
         self.send(uid, description + '\n\nСохранить и опубликовать? Предыдущая версия останется в истории.',
-                  [('✓ Сохранить', ('save',)), ('Отмена', ('home',))])
+                  buttons)
+
+    def bulk_start(self, uid, mode, scope=None):
+        state = self.sessions[uid]
+        state['bulk'] = (mode, scope)
+        state['input'] = ('bulk', ())
+        state.pop('draft', None)
+        target = 'Всё меню' if scope is None else self.find(uid, *scope)[1]['caption']
+        self.send(uid, f'Массовая загрузка: {target}\n'
+                  + ('Режим: только цены.\n' if mode == 'prices' else 'Режим: позиции и цены.\n')
+                  + '\nСкачайте CSV-шаблон с текущими позициями, отредактируйте и отправьте файл сюда. '
+                    'Можно вставить строки текстом вместе с заголовком.\n\n'
+                    'раздел;группа;id;название;цены;описание\n\n'
+                    'Несколько цен: 220 | 260 — в порядке объёмов на сайте. '
+                  + ('Пустой id ищет позицию по названию; новый товар не создаётся. '
+                     if mode == 'prices' else 'Для новой позиции оставьте id пустым. '
+                     'Заполненный id позволяет переименовать существующую позицию. ')
+                  +
+                    'Раздел и группу копируйте из шаблона.\n'
+                    'Пустое описание сохраняет прежнее; «-» удаляет описание. '
+                    'Строки, пропущенные в файле, сохраняются.\n'
+                    'CSV UTF-8, до 512 КБ и 1000 строк. Сначала будет показан предпросмотр.',
+                  [('📄 Скачать CSV-шаблон', ('bulk-template',)), ('Отмена', ('home',))])
+
+    def bulk_input(self, uid, raw):
+        state = self.sessions[uid]
+        mode, scope = state['bulk']
+        menu, summary, changes = apply_csv(state['menu'], raw, mode, scope)
+        if not changes:
+            return self.send(uid, summary + '\nИзменений нет. Можно отправить другой файл.',
+                             [('📄 Скачать шаблон', ('bulk-template',)), ('Отмена', ('home',))])
+        self.preview(uid, menu, 'Массовая загрузка меню\n' + summary + '\n\n' + '\n\n'.join(changes[:3])
+                     + ('\n\nОстальные правки — в «Все изменения».' if len(changes) > 3 else ''), changes)
 
     def ask(self, uid, kind, *ids):
         prompts = {
@@ -176,6 +302,8 @@ class Bot:
     def input(self, uid, raw):
         state = self.sessions[uid]
         kind, ids = state['input']
+        if kind == 'bulk':
+            return self.bulk_input(uid, raw)
         menu = copy.deepcopy(state['menu'])
         raw = raw.strip()
         if not raw or len(raw) > 3500:
@@ -224,6 +352,24 @@ class Bot:
         if op == 'group': return self.group(uid, *args)
         if op == 'item': return self.item(uid, *args)
         if op == 'input': return self.ask(uid, *args)
+        if op == 'bulk-mode':
+            return self.send(uid, 'Выберите режим массовой загрузки. Все изменения сохраняются одним подтверждением.',
+                             [('₽ Только цены', ('bulk', 'prices', *args)),
+                              ('＋ Позиции и цены', ('bulk', 'items', *args)), ('Отмена', ('home',))])
+        if op == 'bulk': return self.bulk_start(uid, args[0], tuple(args[1:]) or None)
+        if op == 'bulk-template':
+            mode, scope = self.sessions[uid]['bulk']
+            self.bulk_start(uid, mode, scope)
+            return self.send_template(uid)
+        if op == 'bulk-confirm': return self.show_preview(uid)
+        if op == 'bulk-preview':
+            page = args[0]
+            changes = self.sessions[uid]['bulk_changes']
+            buttons = []
+            if page: buttons.append(('← Назад', ('bulk-preview', page-1)))
+            if (page+1)*3 < len(changes): buttons.append(('Далее →', ('bulk-preview', page+1)))
+            buttons.append(('← Подтверждение', ('bulk-confirm',)))
+            return self.send(uid, '\n\n'.join(changes[page*3:(page+1)*3]), buttons)
         if op == 'history': return self.history(uid, *args)
         if op == 'version-menu':
             sha, page = args
@@ -285,6 +431,12 @@ class Bot:
         if not authorized: return
         try:
             if callback:
+                message_id = msg.get('message_id')
+                current = self.messages.get(str(uid))
+                if message_id and not current:
+                    self.messages[str(uid)] = message_id
+                elif message_id and current != message_id:
+                    self.delete_message(uid, message_id)
                 entry = self.callbacks.get(callback.get('data'))
                 if not entry or entry[0] != uid:
                     return self.send(uid, 'Кнопка устарела. Откройте /start.')
@@ -294,11 +446,18 @@ class Bot:
                 if text.split('@')[0] in ('/start', '/cancel'):
                     self.home(uid)
                 elif uid in self.sessions and 'input' in self.sessions[uid]:
+                    if 'document' in msg:
+                        if self.sessions[uid]['input'][0] != 'bulk':
+                            raise ValueError('Файлы принимаются в разделе «Массовая загрузка».')
+                        text = self.read_document(msg['document'])
                     self.input(uid, text)
                 else:
                     self.send(uid, 'Откройте /start для управления меню.')
         except ValueError as error:
-            self.send(uid, str(error), [('← Главное меню', ('home',))])
+            buttons = [('← Главное меню', ('home',))]
+            if self.sessions.get(uid, {}).get('input', (None,))[0] == 'bulk':
+                buttons.insert(0, ('📄 Скачать шаблон', ('bulk-template',)))
+            self.send(uid, str(error) + ('\nИсправьте файл и отправьте его снова.' if len(buttons) > 1 else ''), buttons)
         except Exception:
             LOG.error('Operation failed (%s); credentials and message contents omitted', type(update).__name__)
             self.send(uid, 'Операция не завершена. Откройте /start и проверьте актуальное меню.', [('← Меню', ('home',))])
