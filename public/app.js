@@ -71,16 +71,3 @@ document.querySelector('#book').addEventListener('touchend', event => {
 }, { passive: true });
 window.addEventListener('hashchange', () => turnPage(location.hash === '#menu' ? 1 : 0, false));
 if (location.hash === '#menu') turnPage(1, false);
-const motionButton = document.querySelector('#motion-toggle');
-let paused = reducedMotion.matches;
-function setMotion() {
-  motionButton.setAttribute('aria-pressed', String(paused));
-  motionButton.querySelector('.pause-icon').textContent = paused ? '▷' : 'Ⅱ';
-  const label = paused ? 'Продолжить анимацию' : 'Остановить анимацию';
-  motionButton.setAttribute('aria-label', label);
-  motionButton.title = label;
-  window.dispatchEvent(new CustomEvent('coffee-motion', { detail: { paused } }));
-}
-motionButton.addEventListener('click', () => { paused = !paused; setMotion(); });
-reducedMotion.addEventListener('change', event => { paused = event.matches; setMotion(); });
-setMotion();

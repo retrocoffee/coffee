@@ -81,40 +81,14 @@ try {
     beans.push({
       mesh, rotation, anchor: new THREE.Vector3(),
       depth: -3 + Math.random() * 5,
-      phase: Math.random() * Math.PI * 2,
-      speed: .28 + Math.random() * .16,
       jitterX: (Math.random() - .5) * .10,
       jitterY: (Math.random() - .5) * .10
     });
   }
-  let paused = document.querySelector('#motion-toggle').getAttribute('aria-pressed') === 'true';
-  let visible = !document.hidden;
-  let frame = 0;
-  let last = 0;
-  let elapsed = 0;
-  function draw(time = 0) {
-    frame = 0;
-    const dt = Math.min((time - last) / 1000, .035); last = time;
-    if (!paused && visible) elapsed += dt;
-    for (const bean of beans) {
-      const { mesh, anchor, rotation, phase, speed } = bean;
-      const drift = elapsed * speed + phase;
-      // Every movement stays close to its anchor; nothing falls or respawns.
-      mesh.position.set(
-        anchor.x + Math.sin(drift * .8) * .12,
-        anchor.y + Math.sin(drift) * .17,
-        anchor.z + Math.cos(drift * .65) * .08
-      );
-      mesh.rotation.set(
-        rotation.x + Math.sin(drift * .6) * .09,
-        rotation.y + Math.cos(drift * .7) * .14,
-        rotation.z + Math.sin(drift * .5) * .07
-      );
-    }
+  function draw() {
+    for (const { mesh, anchor } of beans) mesh.position.copy(anchor);
     renderer.render(scene, camera);
-    if (!paused && visible) frame = requestAnimationFrame(draw);
   }
-  function resume() { if (!frame) { last = performance.now(); frame = requestAnimationFrame(draw); } }
   function resize() {
     camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
@@ -130,18 +104,15 @@ try {
       const distance = (bean.depth - camera.position.z) / ray.z;
       bean.anchor.copy(camera.position).addScaledVector(ray, distance);
     });
-    if (paused) draw(performance.now());
+    draw();
   }
   window.addEventListener('resize', resize);
-  window.addEventListener('coffee-motion', event => { paused = event.detail.paused; resume(); });
-  document.addEventListener('visibilitychange', () => { visible = !document.hidden; if (visible) resume(); });
   canvas.addEventListener('webglcontextlost', event => {
-    event.preventDefault(); paused = true;
+    event.preventDefault();
     document.querySelector('.scene').classList.add('scene-fallback');
   });
-  resize(); resume();
+  resize();
 } catch (error) {
   document.querySelector('.scene').classList.add('scene-fallback');
-  document.querySelector('#motion-toggle').hidden = true;
   console.warn('3D unavailable; static coffee background enabled.', error.message);
 }
