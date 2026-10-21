@@ -16,6 +16,13 @@ from bot.menu import MENU_PATH, encode, load, prices, validate
 
 LOG = logging.getLogger('menu-bot')
 
+REPLY_ACTIONS = {
+    '🏠 Главное меню': 'home',
+    '📥 Массовая загрузка': 'bulk-mode',
+    '🕘 История меню': 'history',
+    '✖ Отмена': 'home',
+}
+
 
 class TelegramError(RuntimeError):
     def __init__(self, code, description=''):
@@ -83,6 +90,7 @@ class Bot:
         except (OSError, ValueError):
             self.messages = {}
         self.documents = {}
+        self.reply_users = set()
         self.running = True
 
     def api(self, method, payload):
@@ -107,6 +115,31 @@ class Bot:
             raise TelegramError(error.code, description) from None
         except urllib.error.URLError:
             raise RuntimeError('Telegram network error') from None
+
+    def ensure_reply_keyboard(self, uid, force=False):
+        if uid in self.reply_users and not force:
+            return
+        result = self.api('sendMessage', {
+            'chat_id': uid,
+            'text': 'Панель управления. Основные действия — на клавиатуре внизу.',
+            'reply_markup': {
+                'keyboard': [
+                    [{'text': '🏠 Главное меню'}, {'text': '📥 Массовая загрузка'}],
+                    [{'text': '🕘 История меню'}, {'text': '✖ Отмена'}],
+                ],
+                'resize_keyboard': True,
+                'is_persistent': True,
+                'one_time_keyboard': False,
+                'input_field_placeholder': 'Выберите действие или введите данные',
+            },
+        })
+        if result:
+            key = f'keyboard:{uid}'
+            previous = self.messages.get(key)
+            self.messages[key] = result['message_id']
+            if previous and previous != result['message_id']:
+                self.delete_message(uid, previous)
+        self.reply_users.add(uid)
 
     def send(self, uid, text, buttons=()):
         # Edit the current screen; activate its new callbacks only after delivery.
@@ -180,11 +213,15 @@ class Bot:
         except UnicodeError:
             raise ValueError('Сохраните файл в кодировке CSV UTF-8 и отправьте заново.') from None
 
-    def home(self, uid, page=0):
+    def refresh(self, uid):
         git('fetch', 'origin', 'main')
         git('merge', '--ff-only', 'FETCH_HEAD')
         menu = load()
         self.sessions[uid] = {'menu': menu, 'base': fingerprint(menu)}
+
+    def home(self, uid, page=0):
+        self.refresh(uid)
+        menu = self.sessions[uid]['menu']
         sections = menu['sections']
         buttons = [(('🙈 ' if s['hidden'] else '') + s['name'], ('section', s['id'])) for s in sections[page*15:(page+1)*15]]
         if page: buttons.append(('← Предыдущие разделы', ('home', page-1)))
@@ -430,6 +467,7 @@ class Bot:
             self.api('answerCallbackQuery', {'callback_query_id': callback['id'], 'text': '' if authorized else 'Нет доступа'})
         if not authorized: return
         try:
+            self.ensure_reply_keyboard(uid, force=msg.get('text', '').strip() == '/start' and not callback)
             if callback:
                 message_id = msg.get('message_id')
                 current = self.messages.get(str(uid))
@@ -443,7 +481,16 @@ class Bot:
                 self.action(uid, entry[1], update['update_id'])
             else:
                 text = msg.get('text', '')
-                if text.split('@')[0] in ('/start', '/cancel'):
+                if text in REPLY_ACTIONS:
+                    action = REPLY_ACTIONS[text]
+                    if action == 'home':
+                        self.home(uid)
+                    else:
+                        self.refresh(uid)
+                        self.action(uid, (action, 0) if action == 'history' else (action,), update['update_id'])
+                    if msg.get('message_id'):
+                        self.delete_message(uid, msg['message_id'])
+                elif text.split('@')[0] in ('/start', '/cancel'):
                     self.home(uid)
                 elif uid in self.sessions and 'input' in self.sessions[uid]:
                     if 'document' in msg:
