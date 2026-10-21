@@ -16,8 +16,6 @@ try {
   key.position.set(-6, 10, 8); scene.add(key);
   const rim = new THREE.DirectionalLight(0xd9e0e8, 2.2);
   rim.position.set(7, 4, -5); scene.add(rim);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 80), new THREE.MeshBasicMaterial({ color: 0x161719, transparent: true, opacity: .28, depthWrite: false }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = -.02; scene.add(floor);
   // A slightly asymmetric oval with a deep, irregular natural split.
   const geometry = new THREE.SphereGeometry(1, 48, 36);
   const vertices = geometry.attributes.position;
@@ -68,50 +66,50 @@ try {
     color: 0x655346, map: texture, vertexColors: true,
     roughness: .67, metalness: 0, bumpMap: texture, bumpScale: .045
   });
-  const reflectionMaterial = material.clone();
-  reflectionMaterial.transparent = true; reflectionMaterial.opacity = .24;
-  reflectionMaterial.depthWrite = false;
   const beans = [];
-  let viewWidth = 20;
-  function newX() { return (Math.random() - .5) * viewWidth * 1.03; }
-  for (let i = 0; i < 38; i++) {
+  for (let i = 0; i < 20; i++) {
     const mesh = new THREE.Mesh(geometry, material);
-    const scale = .12 + Math.random() * .20;
+    const scale = .46 + Math.random() * .38;
     mesh.scale.setScalar(scale);
-    mesh.position.set(newX(), .8 + Math.random() * 13, -5 + Math.random() * 7);
-    mesh.rotation.set(Math.random() * 2, Math.random() * 4, Math.random() * 6);
+    const rotation = new THREE.Euler(
+      (Math.random() - .5) * 1.2,
+      (Math.random() - .5) * 1.7,
+      (Math.random() - .5) * 3
+    );
+    mesh.rotation.copy(rotation);
     scene.add(mesh);
-    const mirror = new THREE.Mesh(geometry, reflectionMaterial); scene.add(mirror);
-    beans.push({ mesh, mirror, scale, velocity: -.4 - Math.random(), spin: (Math.random() - .5) * 1.2, bounces: 0, wait: 0 });
+    beans.push({
+      mesh, rotation, anchor: new THREE.Vector3(),
+      depth: -3 + Math.random() * 5,
+      phase: Math.random() * Math.PI * 2,
+      speed: .28 + Math.random() * .16,
+      jitterX: (Math.random() - .5) * .10,
+      jitterY: (Math.random() - .5) * .10
+    });
   }
   let paused = document.querySelector('#motion-toggle').getAttribute('aria-pressed') === 'true';
   let visible = !document.hidden;
   let frame = 0;
   let last = 0;
+  let elapsed = 0;
   function draw(time = 0) {
     frame = 0;
     const dt = Math.min((time - last) / 1000, .035); last = time;
+    if (!paused && visible) elapsed += dt;
     for (const bean of beans) {
-      const { mesh, mirror, scale } = bean;
-      if (!paused && visible) {
-        bean.velocity -= 1.8 * dt;
-        mesh.position.y += bean.velocity * dt;
-        mesh.rotation.x += bean.spin * dt * .7;
-        mesh.rotation.z += .34 * dt;
-        if (mesh.position.y < scale * .65) {
-          mesh.position.y = scale * .65;
-          bean.velocity = Math.abs(bean.velocity) * .57;
-          bean.bounces++;
-          if (bean.bounces > 3) bean.wait += dt;
-          if (bean.wait > 1.1) {
-            mesh.position.set(newX(), 13 + Math.random() * 4, -5 + Math.random() * 7);
-            bean.velocity = -.5; bean.bounces = 0; bean.wait = 0;
-          }
-        }
-      }
-      mirror.position.copy(mesh.position); mirror.position.y = -mesh.position.y;
-      mirror.rotation.set(-mesh.rotation.x, mesh.rotation.y, -mesh.rotation.z);
-      mirror.scale.set(scale, -scale, scale);
+      const { mesh, anchor, rotation, phase, speed } = bean;
+      const drift = elapsed * speed + phase;
+      // Every movement stays close to its anchor; nothing falls or respawns.
+      mesh.position.set(
+        anchor.x + Math.sin(drift * .8) * .12,
+        anchor.y + Math.sin(drift) * .17,
+        anchor.z + Math.cos(drift * .65) * .08
+      );
+      mesh.rotation.set(
+        rotation.x + Math.sin(drift * .6) * .09,
+        rotation.y + Math.cos(drift * .7) * .14,
+        rotation.z + Math.sin(drift * .5) * .07
+      );
     }
     renderer.render(scene, camera);
     if (!paused && visible) frame = requestAnimationFrame(draw);
@@ -120,9 +118,18 @@ try {
   function resize() {
     camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
-    const nextWidth = 2 * Math.tan(THREE.MathUtils.degToRad(43 / 2)) * 20 * camera.aspect;
-    beans.forEach(bean => { bean.mesh.position.x *= nextWidth / viewWidth; });
-    viewWidth = nextWidth;
+    camera.updateMatrixWorld();
+    const columns = camera.aspect < .75 ? 3 : 5;
+    beans.forEach((bean, index) => {
+      bean.mesh.visible = index < columns * 4;
+      const col = index % columns;
+      const row = Math.floor(index / columns);
+      const x = -.84 + col * (1.68 / (columns - 1)) + bean.jitterX;
+      const y = .80 - row * (1.6 / 3) + bean.jitterY;
+      const ray = new THREE.Vector3(x, y, .5).unproject(camera).sub(camera.position).normalize();
+      const distance = (bean.depth - camera.position.z) / ray.z;
+      bean.anchor.copy(camera.position).addScaledVector(ray, distance);
+    });
     if (paused) draw(performance.now());
   }
   window.addEventListener('resize', resize);
