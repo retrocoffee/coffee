@@ -16,6 +16,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build menu and verify editor
+        run: |
+          python -m unittest discover -s tests
+          python scripts/build-menu.py
       - name: Check JavaScript and local assets
         run: |
           node --check public/app.js

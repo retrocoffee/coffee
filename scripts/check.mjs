@@ -7,6 +7,7 @@ for (const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)) {
 }
 assert(html.includes('lang="ru"'));
 assert(html.includes('РЕТРОКОФЕ'));
-assert.equal((html.match(/class="menu-category"/g) || []).length, 6);
+const menu = JSON.parse(readFileSync('data/menu.json', 'utf8'));
+assert.equal((html.match(/class="menu-category"/g) || []).length, menu.sections.filter(section => !section.hidden).length);
 assert(!html.includes('coffee-bean'));
-console.log('Six menu categories and local assets verified.');
+console.log('Menu categories and local assets verified.');

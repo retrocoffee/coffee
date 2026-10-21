@@ -1,0 +1,64 @@
+name: Telegram menu admin
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bot/**'
+      - '.github/workflows/telegram-bot.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */4 * * *'
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: telegram-menu-admin
+  cancel-in-progress: false
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 260
+    steps:
+      - name: Check configuration
+        id: config
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ADMIN_IDS: ${{ secrets.TELEGRAM_ADMIN_IDS }}
+        run: |
+          if [ -n "$BOT_TOKEN" ] && [ -n "$ADMIN_IDS" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Configure TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_IDS in repository Actions secrets." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.ready == 'true'
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        if: steps.config.outputs.ready == 'true'
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        if: steps.config.outputs.ready == 'true'
+        with:
+          path: .bot-state
+          key: telegram-offset-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: telegram-offset-
+      - name: Run menu bot
+        if: steps.config.outputs.ready == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_IDS: ${{ secrets.TELEGRAM_ADMIN_IDS }}
+          GITHUB_TOKEN: ${{ github.token }}
+          BOT_RUN_SECONDS: '14700'
+        run: |
+          git config user.name 'RetroCoffe menu bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python -m unittest discover -s tests
+          python -m bot.telegram_bot
+      - uses: actions/cache/save@v4
+        if: always() && steps.config.outputs.ready == 'true'
+        with:
+          path: .bot-state
+          key: telegram-offset-${{ github.run_id }}-${{ github.run_attempt }}

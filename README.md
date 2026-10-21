@@ -19,6 +19,10 @@ GitHub Actions в `.github/workflows/deploy.yml` проверяет сайт и 
 
 ## Изменения
 
-Меню и цены — `public/index.html`, оформление — `public/style.css`, логотип — `public/assets/logo.svg`. Разделы работают через нативные `details` и `summary`, в том числе с клавиатуры и без JavaScript. Скрипт `public/app.js` обеспечивает открытие одной категории за раз в старых браузерах.
+Меню и цены — `data/menu.json`, сгенерированная страница — `public/index.html`, оформление — `public/style.css`, логотип — `public/assets/logo.svg`. Разделы работают через нативные `details` и `summary`, в том числе с клавиатуры и без JavaScript. Скрипт `public/app.js` обеспечивает открытие одной категории за раз в старых браузерах.
 
 Manrope — SIL Open Font License, лицензия в `public/assets/MANROPE-LICENSE.txt`.
+
+## Меню через Telegram
+
+[Настройка и инструкция бота](bot/README.md). Источник меню — `data/menu.json`; меняйте оформление независимо от него. `npm start` и GitHub Actions собирают HTML из актуальных данных автоматически. Редактирование меню в сгенерированном HTML не сохраняется после сборки.
