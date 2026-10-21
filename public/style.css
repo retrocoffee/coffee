@@ -4,7 +4,7 @@
 :root{color-scheme:dark;--cream:#f2dfbc;--muted:#bca68d;--gold:#d8ac70}
 *{box-sizing:border-box}body{margin:0;background:#161719;color:var(--cream);font-family:CoffeeSans,Arial,sans-serif;font-size:14px;min-height:100svh}button{font:inherit;color:inherit;cursor:pointer;border:0;-webkit-tap-highlight-color:transparent}button:focus-visible{outline:2px solid #e6bb80;outline-offset:7px}button[hidden],[hidden]{display:none!important}
 .scene{position:fixed;inset:0;z-index:-3;overflow:hidden;pointer-events:none;background:radial-gradient(ellipse at 50% 42%,#29292a 0,#1b1c1e 48%,#111214 100%)}
-.coffee-bean{position:absolute;left:var(--x);top:var(--y);width:clamp(110px,var(--size),300px);height:auto;transform:translate(-50%,-50%) rotate(var(--angle));filter:blur(var(--blur)) brightness(.65) saturate(.72);opacity:.78;user-select:none}
+.coffee-bean{position:absolute;left:var(--x);top:var(--y);width:clamp(48px,var(--size),220px);height:auto;transform:translate(-50%,-50%) rotate(var(--angle));filter:blur(var(--blur)) brightness(.65) saturate(.72);opacity:var(--opacity);user-select:none;animation:bean-hover var(--duration) ease-in-out var(--delay) infinite;will-change:transform}
 .scene-tint{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 46%,#11121405 20%,#0b0c0e55 100%)}
 .book{position:relative;perspective:1800px;min-height:100svh}.page{backface-visibility:hidden;transform-origin:left center;width:100%}.cover{min-height:100svh;display:flex;align-items:center;justify-content:center;text-align:center;position:relative}.cover-content{padding:30px 7%;width:100%}h1{font-family:CoffeeSign,Arial,sans-serif;font-weight:800;font-size:clamp(36px,9.3vw,150px);line-height:1.15;letter-spacing:-.025em;margin:0;white-space:nowrap;color:#ffdfab;text-shadow:0 -1px 1px #fff4da,0 1px 0 #cba46d,0 2px 0 #a78658,0 3px 0 #816842,0 4px 0 #5d4c34,0 6px 1px #322b22,0 12px 14px #0008,0 0 20px #efb56d38,0 0 65px #ecaf6230,0 0 130px #efb56d12}
 .page-arrow{position:fixed;top:calc(50% - 27px);z-index:6;background:transparent;width:54px;height:54px;display:flex;align-items:center;justify-content:center;color:#d7cec04d;transition:color .25s}.page-arrow svg{width:30px;fill:none;stroke:currentColor;stroke-width:1}.page-arrow:hover{color:#ffe0a8}.next{right:2%;color:#d7cec0b3}.page-arrow .menu-icon{width:21px;height:21px;stroke-width:1.2}.previous{left:2%}.previous svg{transform:rotate(180deg)}
@@ -16,3 +16,9 @@
 .page-arrow.next{width:44px;background:#17181a80;border:1px solid #d7cec01c;border-radius:50%;backdrop-filter:blur(8px)}
 
 @media(max-width:600px){.coffee-bean{left:var(--mobile-x);top:var(--mobile-y);width:var(--mobile-size);filter:blur(var(--blur)) brightness(.6) saturate(.72)}.coffee-bean:nth-of-type(n+13){display:none}}
+
+@keyframes bean-hover{
+  0%,100%{transform:translate(-50%,-50%) rotate(var(--angle)) scale(1)}
+  50%{transform:translate(calc(-50% + var(--drift-x)),calc(-50% + var(--drift-y))) rotate(calc(var(--angle) + var(--tilt))) scale(1.025)}
+}
+@media(prefers-reduced-motion:reduce){.coffee-bean{animation:none;will-change:auto}}
