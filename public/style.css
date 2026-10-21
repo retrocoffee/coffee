@@ -6,6 +6,7 @@ body{margin:0;background:var(--white);color:var(--black);min-width:280px;-webkit
 .brand,.menu{width:min(760px,calc(100% - 40px));margin-inline:auto}
 .brand{padding-top:34px;text-align:center}
 .brand-logo{display:block;width:96px;height:96px;margin:0 auto 23px}
+.brand-title{display:block;width:28px;height:84px;margin:24 auto 23px}
 h1{margin:0;font:800 clamp(28px,10.2vw,84px)/1.12 RetroSign,'Arial Black',Arial,sans-serif;letter-spacing:-.045em;white-space:nowrap}
 .brand-line,.end-line{height:4px;border-radius:4px;background:var(--red);width:52%}
 .brand-line{max-width:380px;margin:24px auto 5px}
