@@ -10,7 +10,7 @@ h1{margin:0;font:400 clamp(40px,11.8vw,84px)/1.12 Retro,Arial,sans-serif;letter-
 .brand-line{max-width:380px;margin:24px auto 5px}
 .menu-category{border-bottom:1px solid var(--red)}
 .menu-category:last-child{border-bottom:0}
-summary{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:21px 2px;cursor:pointer;list-style:none;-webkit-tap-highlight-color:transparent}
+summary{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:21px 2px;cursor:pointer;list-style:none;scroll-margin-top:12px;-webkit-tap-highlight-color:transparent}
 summary::-webkit-details-marker{display:none}
 summary::marker{content:''}
 summary>span:first-child{font-size:clamp(28px,6.9vw,44px);line-height:1.19;letter-spacing:-.025em;text-transform:uppercase;max-width:95%;overflow-wrap:normal}
