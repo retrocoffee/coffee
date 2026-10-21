@@ -1,11 +1,12 @@
 @font-face{font-family:Retro;src:url('./assets/sans.woff2') format('woff2');font-style:normal;font-weight:400;font-display:swap}
+@font-face{font-family:RetroSign;src:url('./assets/sign.woff2') format('woff2');font-style:normal;font-weight:800;font-display:swap}
 :root{color-scheme:light;--black:#000;--white:#fff;--red:#ed1c24;font-family:Retro,Arial,sans-serif;font-weight:400;font-synthesis:none}
 *{box-sizing:border-box}
 body{margin:0;background:var(--white);color:var(--black);min-width:280px;-webkit-font-smoothing:antialiased}
 .brand,.menu{width:min(760px,calc(100% - 40px));margin-inline:auto}
 .brand{padding-top:34px;text-align:center}
 .brand-logo{display:block;width:96px;height:96px;margin:0 auto 23px}
-h1{margin:0;font:400 clamp(40px,11.8vw,84px)/1.12 Retro,Arial,sans-serif;letter-spacing:-.045em;white-space:nowrap}
+h1{margin:0;font:800 clamp(28px,10.2vw,84px)/1.12 RetroSign,'Arial Black',Arial,sans-serif;letter-spacing:-.045em;white-space:nowrap}
 .brand-line,.end-line{height:4px;border-radius:4px;background:var(--red);width:52%}
 .brand-line{max-width:380px;margin:24px auto 5px}
 .menu-category{border-bottom:1px solid var(--red)}
@@ -33,4 +34,4 @@ summary:focus-visible{outline:2px solid var(--red);outline-offset:5px}
 .extras th,.extras td{font-size:13px;padding-top:8px;padding-bottom:8px}
 .end-line{width:220px;max-width:45%;margin:16px auto 36px}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-@media(max-width:600px){.brand,.menu{width:calc(100% - 36px)}.brand{padding-top:25px}.brand-logo{width:80px;height:80px;margin-bottom:22px}h1{font-size:11.8vw}.brand-line{margin-top:19px;margin-bottom:6px;height:3px}summary{padding:17px 0;gap:14px}summary>span:first-child{font-size:clamp(27px,7.3vw,39px)}.expand-icon{width:18px;height:18px;flex-basis:18px;margin-right:1px}.expand-icon:before{width:16px;left:1px;top:8px}.expand-icon:after{height:16px;left:8px;top:1px}.category-content{padding:1px 0 18px}.price-table{font-size:14px}.price-table tbody th{padding-right:8px}.price-table td{font-size:13px;min-width:58px;padding-left:10px}.item-note{font-size:11px}.price-table thead th{font-size:11px}.end-line{height:3px;margin-top:15px;margin-bottom:28px}}
+@media(max-width:600px){.brand,.menu{width:calc(100% - 36px)}.brand{padding-top:25px}.brand-logo{width:80px;height:80px;margin-bottom:22px}h1{font-size:10.2vw}.brand-line{margin-top:19px;margin-bottom:6px;height:3px}summary{padding:17px 0;gap:14px}summary>span:first-child{font-size:clamp(27px,7.3vw,39px)}.expand-icon{width:18px;height:18px;flex-basis:18px;margin-right:1px}.expand-icon:before{width:16px;left:1px;top:8px}.expand-icon:after{height:16px;left:8px;top:1px}.category-content{padding:1px 0 18px}.price-table{font-size:14px}.price-table tbody th{padding-right:8px}.price-table td{font-size:13px;min-width:58px;padding-left:10px}.item-note{font-size:11px}.price-table thead th{font-size:11px}.end-line{height:3px;margin-top:15px;margin-bottom:28px}}
