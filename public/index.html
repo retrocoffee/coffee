@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#20140e"><meta name="description" content="РЕТРОКОФЕ — маленькая пауза, большой вкус. Откройте наше кофейное меню.">
+<title>РЕТРОКОФЕ — кофе вне времени</title><link rel="icon" href="./assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="scene" aria-hidden="true"><canvas id="coffee-scene"></canvas><div class="scene-tint"></div><div class="floor-line"></div></div>
+<div class="grain" aria-hidden="true"></div>
+<header class="header"><a class="wordmark" href="#home" aria-label="РЕТРОКОФЕ — главная"><svg viewBox="0 0 32 36" aria-hidden="true"><ellipse cx="16" cy="18" rx="11" ry="16" transform="rotate(30 16 18)"/><path d="M23 5C6 14 26 20 9 31"/></svg><span>RETROCOFFE<span class="wordmark-caption">КОФЕ ВНЕ ВРЕМЕНИ</span></span></a><nav aria-label="Основная навигация"><button class="nav-link active" data-page="0">Главная</button><button class="nav-link" data-page="1">Наше меню <span>↗</span></button></nav><span class="header-note">С любовью к каждой чашке</span></header>
+<main id="book" class="book">
+<section class="page cover active" id="home" aria-label="Главная">
+<div class="cover-content"><div class="eyebrow"><span></span> МЕСТО ДЛЯ ТЁПЛЫХ МОМЕНТОВ <span></span></div><p class="script-line">Всё начинается с аромата</p><h1>РЕТРОКОФЕ</h1><div class="title-rule"><span>✦</span></div><p class="intro">Знакомый вкус. Новые воспоминания.<br>Просто остановитесь на чашечку.</p><button class="menu-cta" data-page="1">Открыть меню <span>⟶</span></button><p class="cover-footnote">Кофе, который хочется пить не спеша</p></div>
+<div class="edition"><span>ОБЖАРЕНО С ЗАБОТОЙ</span><svg viewBox="0 0 54 54" aria-hidden="true"><path d="M15 21h24v8a12 12 0 0 1-24 0zM39 23h3a5 5 0 0 1 0 10h-4M10 43h34M22 15c-5-6 5-6 0-12M31 15c-5-6 5-6 0-12"/></svg><span>СОГРЕВАЕТ ИЗНУТРИ</span></div>
+</section>
+<section class="page menu-page" id="menu" aria-labelledby="menu-title" inert hidden>
+<div class="menu-heading"><span class="eyebrow">РЕТРОКОФЕ · КОЛЛЕКЦИЯ ВКУСОВ</span><h2 id="menu-title">Маленькие ритуалы.<br><em>Большое удовольствие.</em></h2><p>Выберите настроение — мы добавим кофе.</p></div>
+<div class="menu-book"><div class="menu-side"><div class="chapter"><span>01 / КОФЕЙНАЯ КЛАССИКА</span><svg viewBox="0 0 54 54" aria-hidden="true"><path d="M15 21h24v8a12 12 0 0 1-24 0zM39 23h3a5 5 0 0 1 0 10h-4M10 43h34M22 15c-5-6 5-6 0-12M31 15c-5-6 5-6 0-12"/></svg></div><div class="menu-items">
+<article class="menu-item"><div><h3>Эспрессо</h3><p>Плотный, яркий, с шоколадным послевкусием</p></div><span class="portion">30 мл</span><span class="price">150 ₽</span></article>
+<article class="menu-item"><div><h3>Американо</h3><p>Чистый вкус кофе для неспешного утра</p></div><span class="portion">200 мл</span><span class="price">190 ₽</span></article>
+<article class="menu-item"><div><h3>Капучино <span class="favorite">♡</span></h3><p>Эспрессо и нежная молочная пена</p></div><span class="portion">250 мл</span><span class="price">250 ₽</span></article>
+<article class="menu-item"><div><h3>Латте</h3><p>Мягкий, сливочный, по-домашнему тёплый</p></div><span class="portion">300 мл</span><span class="price">290 ₽</span></article>
+</div><p class="menu-aside">Хороший день начинается с любимой чашки.</p></div>
+<div class="menu-side"><div class="chapter"><span>02 / ЧТО-ТО ОСОБЕННОЕ</span><span class="star">✧</span></div><div class="menu-items">
+<article class="menu-item"><div><h3>Раф «Тёплая карамель»</h3><p>Кофе, сливки и мягкая солёная карамель</p></div><span class="portion">300 мл</span><span class="price">340 ₽</span></article>
+<article class="menu-item"><div><h3>Какао</h3><p>Густой шоколад и воздушные маршмеллоу</p></div><span class="portion">300 мл</span><span class="price">270 ₽</span></article>
+<article class="menu-item"><div><h3>Круассан</h3><p>Золотистая корочка и сливочное сердце</p></div><span class="portion">80 г</span><span class="price">190 ₽</span></article>
+<article class="menu-item"><div><h3>Чизкейк «Классика»</h3><p>Нежный сливочный сыр на песочной основе</p></div><span class="portion">140 г</span><span class="price">320 ₽</span></article>
+</div><p class="menu-aside">И немного сладкого. Просто потому что хочется.</p></div></div><p class="demo-note">Пробное меню · позиции и цены приведены для примера</p>
+</section>
+</main>
+<button class="page-arrow previous" aria-label="Вернуться на главную" hidden><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M2 12h38M29 2l11 10-11 10"/></svg><span>НАЗАД</span></button>
+<button class="page-arrow next" aria-label="Перелистнуть к меню"><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M2 12h38M29 2l11 10-11 10"/></svg><span>МЕНЮ</span></button>
+<footer class="footer"><div class="footer-note"><i></i> НЕ СПЕШИТЕ. ВЫ УЖЕ НА МЕСТЕ.</div><div class="pagination" aria-label="Страницы"><button class="selected" data-page="0" aria-label="Страница 1: главная" aria-current="page">01</button><span class="pagination-line"></span><button data-page="1" aria-label="Страница 2: меню">02</button></div><button id="motion-toggle" aria-pressed="false"><span class="pause-icon">Ⅱ</span><span class="motion-label">Остановить мгновение</span></button></footer>
+<p id="page-announcement" class="sr-only" aria-live="polite"></p>
+<script type="module" src="./app.js"></script><script type="module" src="./scene.js"></script>
+</body></html>
