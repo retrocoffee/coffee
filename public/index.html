@@ -2,17 +2,15 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#20140e"><meta name="description" content="РЕТРОКОФЕ — маленькая пауза, большой вкус. Откройте наше кофейное меню.">
+<meta name="theme-color" content="#161719"><meta name="description" content="РЕТРОКОФЕ — маленькая пауза, большой вкус. Откройте наше кофейное меню.">
 <title>РЕТРОКОФЕ — кофе вне времени</title><link rel="icon" href="./assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <div class="scene" aria-hidden="true"><canvas id="coffee-scene"></canvas><div class="scene-tint"></div><div class="floor-line"></div></div>
 <div class="grain" aria-hidden="true"></div>
-<header class="header"><a class="wordmark" href="#home" aria-label="РЕТРОКОФЕ — главная"><svg viewBox="0 0 32 36" aria-hidden="true"><ellipse cx="16" cy="18" rx="11" ry="16" transform="rotate(30 16 18)"/><path d="M23 5C6 14 26 20 9 31"/></svg><span>RETROCOFFE<span class="wordmark-caption">КОФЕ ВНЕ ВРЕМЕНИ</span></span></a><nav aria-label="Основная навигация"><button class="nav-link active" data-page="0">Главная</button><button class="nav-link" data-page="1">Наше меню <span>↗</span></button></nav><span class="header-note">С любовью к каждой чашке</span></header>
 <main id="book" class="book">
 <section class="page cover active" id="home" aria-label="Главная">
-<div class="cover-content"><div class="eyebrow"><span></span> МЕСТО ДЛЯ ТЁПЛЫХ МОМЕНТОВ <span></span></div><p class="script-line">Всё начинается с аромата</p><h1>РЕТРОКОФЕ</h1><div class="title-rule"><span>✦</span></div><p class="intro">Знакомый вкус. Новые воспоминания.<br>Просто остановитесь на чашечку.</p><button class="menu-cta" data-page="1">Открыть меню <span>⟶</span></button><p class="cover-footnote">Кофе, который хочется пить не спеша</p></div>
-<div class="edition"><span>ОБЖАРЕНО С ЗАБОТОЙ</span><svg viewBox="0 0 54 54" aria-hidden="true"><path d="M15 21h24v8a12 12 0 0 1-24 0zM39 23h3a5 5 0 0 1 0 10h-4M10 43h34M22 15c-5-6 5-6 0-12M31 15c-5-6 5-6 0-12"/></svg><span>СОГРЕВАЕТ ИЗНУТРИ</span></div>
+<div class="cover-content"><h1>РЕТРОКОФЕ</h1></div>
 </section>
 <section class="page menu-page" id="menu" aria-labelledby="menu-title" inert hidden>
 <div class="menu-heading"><span class="eyebrow">РЕТРОКОФЕ · КОЛЛЕКЦИЯ ВКУСОВ</span><h2 id="menu-title">Маленькие ритуалы.<br><em>Большое удовольствие.</em></h2><p>Выберите настроение — мы добавим кофе.</p></div>
@@ -30,9 +28,9 @@
 </div><p class="menu-aside">И немного сладкого. Просто потому что хочется.</p></div></div><p class="demo-note">Пробное меню · позиции и цены приведены для примера</p>
 </section>
 </main>
-<button class="page-arrow previous" aria-label="Вернуться на главную" hidden><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M2 12h38M29 2l11 10-11 10"/></svg><span>НАЗАД</span></button>
-<button class="page-arrow next" aria-label="Перелистнуть к меню"><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M2 12h38M29 2l11 10-11 10"/></svg><span>МЕНЮ</span></button>
-<footer class="footer"><div class="footer-note"><i></i> НЕ СПЕШИТЕ. ВЫ УЖЕ НА МЕСТЕ.</div><div class="pagination" aria-label="Страницы"><button class="selected" data-page="0" aria-label="Страница 1: главная" aria-current="page">01</button><span class="pagination-line"></span><button data-page="1" aria-label="Страница 2: меню">02</button></div><button id="motion-toggle" aria-pressed="false"><span class="pause-icon">Ⅱ</span><span class="motion-label">Остановить мгновение</span></button></footer>
+<button class="page-arrow previous" aria-label="Вернуться на главную" hidden><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M2 12h38M29 2l11 10-11 10"/></svg></button>
+<button class="page-arrow next" aria-label="Перелистнуть к меню"><svg viewBox="0 0 44 24" aria-hidden="true"><path d="M2 12h38M29 2l11 10-11 10"/></svg></button>
+<button id="motion-toggle" aria-pressed="false" aria-label="Остановить анимацию" title="Остановить анимацию"><span class="pause-icon" aria-hidden="true">Ⅱ</span></button>
 <p id="page-announcement" class="sr-only" aria-live="polite"></p>
 <script type="module" src="./app.js"></script><script type="module" src="./scene.js"></script>
 </body></html>

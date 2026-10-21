@@ -48,14 +48,13 @@ async function turnPage(target, updateHash = true) {
   if (updateHash) history.replaceState(null, '', current ? '#menu' : '#home');
   document.querySelector('#page-announcement').textContent = current ? 'Страница 2: меню кофейни' : 'Страница 1: РЕТРОКОФЕ';
   if (outgoing.contains(document.activeElement) || document.activeElement.hidden) {
-    controls.find(button => Number(button.dataset.page) === current).focus({ preventScroll: true });
+    (current ? previous : next).focus({ preventScroll: true });
   }
   busy = false;
 }
 controls.forEach(button => button.addEventListener('click', () => turnPage(Number(button.dataset.page))));
 previous.addEventListener('click', () => turnPage(0));
 next.addEventListener('click', () => turnPage(1));
-document.querySelector('.wordmark').addEventListener('click', event => { event.preventDefault(); turnPage(0); });
 window.addEventListener('keydown', event => {
   if (event.altKey || event.ctrlKey || event.metaKey) return;
   if (event.key === 'ArrowRight') turnPage(1);
@@ -77,7 +76,9 @@ let paused = reducedMotion.matches;
 function setMotion() {
   motionButton.setAttribute('aria-pressed', String(paused));
   motionButton.querySelector('.pause-icon').textContent = paused ? '▷' : 'Ⅱ';
-  motionButton.querySelector('.motion-label').textContent = paused ? 'Продолжить мгновение' : 'Остановить мгновение';
+  const label = paused ? 'Продолжить анимацию' : 'Остановить анимацию';
+  motionButton.setAttribute('aria-label', label);
+  motionButton.title = label;
   window.dispatchEvent(new CustomEvent('coffee-motion', { detail: { paused } }));
 }
 motionButton.addEventListener('click', () => { paused = !paused; setMotion(); });

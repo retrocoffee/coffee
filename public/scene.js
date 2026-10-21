@@ -5,48 +5,78 @@ try {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.35;
+  renderer.toneMappingExposure = 1.1;
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x28190f, .037);
+  scene.fog = new THREE.FogExp2(0x161719, .03);
   const camera = new THREE.PerspectiveCamera(43, 1, .1, 100);
   camera.position.set(0, 5.8, 20);
   camera.lookAt(0, 4.4, 0);
-  scene.add(new THREE.AmbientLight(0xd5a779, 2.1));
-  const key = new THREE.DirectionalLight(0xffd8a1, 5);
+  scene.add(new THREE.AmbientLight(0xc7c6c3, 1.65));
+  const key = new THREE.DirectionalLight(0xffe5c2, 3.3);
   key.position.set(-6, 10, 8); scene.add(key);
-  const rim = new THREE.DirectionalLight(0xfbb86d, 3);
+  const rim = new THREE.DirectionalLight(0xd9e0e8, 2.2);
   rim.position.set(7, 4, -5); scene.add(rim);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 80), new THREE.MeshBasicMaterial({ color: 0x28180e, transparent: true, opacity: .36, depthWrite: false }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 80), new THREE.MeshBasicMaterial({ color: 0x161719, transparent: true, opacity: .28, depthWrite: false }));
   floor.rotation.x = -Math.PI / 2; floor.position.y = -.02; scene.add(floor);
-  // Sculpt an actual bean with an irregular crease on the front surface.
-  const geometry = new THREE.SphereGeometry(1, 48, 40);
+  // A slightly asymmetric oval with a deep, irregular natural split.
+  const geometry = new THREE.SphereGeometry(1, 48, 36);
   const vertices = geometry.attributes.position;
+  const colors = [];
   for (let i = 0; i < vertices.count; i++) {
     const x = vertices.getX(i), y = vertices.getY(i), z = vertices.getZ(i);
-    const creaseX = .1 * Math.sin(y * 3.3);
-    const groove = z > 0 ? .27 * Math.exp(-Math.pow((x - creaseX) / .095, 2)) * Math.pow(Math.max(0, 1 - y * y), .4) : 0;
-    const irregularity = 1 + .018 * Math.sin(y * 19 + x * 13) * Math.cos(z * 17);
-    vertices.setXYZ(i, x * .68 * irregularity, y * irregularity, z * .48 - groove);
+    const creaseX = .075 * Math.sin(y * 3.6) + .014 * Math.sin(y * 19);
+    const distance = Math.abs(x - creaseX);
+    const front = THREE.MathUtils.smoothstep(z, .03, .35);
+    const crease = Math.exp(-Math.pow(distance / .08, 2)) * front;
+    const ends = Math.pow(Math.max(0, 1 - y * y), .55);
+    const ripple = .006 * Math.sin(y * 31 + x * 17) * Math.cos(z * 23);
+    const asymmetry = 1 + .045 * Math.sin(y * 2.5 + x * 2);
+    vertices.setXYZ(i,
+      x * .66 * asymmetry + ripple,
+      y * .91,
+      z * .44 - .34 * crease * ends + ripple
+    );
+    const shade = 1 - crease * .68;
+    colors.push(shade, shade * .96, shade * .91);
   }
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
-  const textureCanvas = document.createElement('canvas'); textureCanvas.width = textureCanvas.height = 128;
+  // Layered mottling, fine pores, and narrow wrinkles break up the surface.
+  const textureCanvas = document.createElement('canvas');
+  textureCanvas.width = textureCanvas.height = 256;
   const ctx = textureCanvas.getContext('2d');
-  const pixels = ctx.createImageData(128, 128);
-  for (let i = 0; i < pixels.data.length; i += 4) {
-    const shade = 105 + Math.random() * 90;
-    pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = shade;
-    pixels.data[i + 3] = 255;
+  ctx.fillStyle = '#9c8b78'; ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 1800; i++) {
+    const x = Math.random() * 256, y = Math.random() * 256;
+    const radius = 1 + Math.random() * 9;
+    const spot = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    spot.addColorStop(0, Math.random() > .5 ? '#e4c99a24' : '#211b1738');
+    spot.addColorStop(1, '#00000000');
+    ctx.fillStyle = spot; ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
   }
-  ctx.putImageData(pixels, 0, 0);
+  for (let i = 0; i < 1600; i++) {
+    const x = Math.random() * 256, y = Math.random() * 256;
+    ctx.strokeStyle = i % 2 ? '#211b1733' : '#ebd2b11c';
+    ctx.lineWidth = .4 + Math.random() * .6;
+    ctx.beginPath(); ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x - 1, y + 2, x + Math.random() * 2 - 1, y + 3 + Math.random() * 8);
+    ctx.stroke();
+  }
   const texture = new THREE.CanvasTexture(textureCanvas);
-  const material = new THREE.MeshStandardMaterial({ color: 0x754124, roughness: .48, metalness: .08, bumpMap: texture, bumpScale: .065 });
-  const reflectionMaterial = material.clone(); reflectionMaterial.transparent = true; reflectionMaterial.opacity = .19; reflectionMaterial.depthWrite = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x655346, map: texture, vertexColors: true,
+    roughness: .67, metalness: 0, bumpMap: texture, bumpScale: .045
+  });
+  const reflectionMaterial = material.clone();
+  reflectionMaterial.transparent = true; reflectionMaterial.opacity = .24;
+  reflectionMaterial.depthWrite = false;
   const beans = [];
   let viewWidth = 20;
-  function newX() { return (Math.random() < .5 ? -1 : 1) * (viewWidth * (.24 + Math.random() * .3)); }
-  for (let i = 0; i < 24; i++) {
+  function newX() { return (Math.random() - .5) * viewWidth * 1.03; }
+  for (let i = 0; i < 38; i++) {
     const mesh = new THREE.Mesh(geometry, material);
-    const scale = .28 + Math.random() * .57;
+    const scale = .12 + Math.random() * .20;
     mesh.scale.setScalar(scale);
     mesh.position.set(newX(), .8 + Math.random() * 13, -5 + Math.random() * 7);
     mesh.rotation.set(Math.random() * 2, Math.random() * 4, Math.random() * 6);
@@ -64,9 +94,9 @@ try {
     for (const bean of beans) {
       const { mesh, mirror, scale } = bean;
       if (!paused && visible) {
-        bean.velocity -= 2.6 * dt;
+        bean.velocity -= 1.8 * dt;
         mesh.position.y += bean.velocity * dt;
-        mesh.rotation.x += bean.spin * dt;
+        mesh.rotation.x += bean.spin * dt * .7;
         mesh.rotation.z += .34 * dt;
         if (mesh.position.y < scale * .65) {
           mesh.position.y = scale * .65;
