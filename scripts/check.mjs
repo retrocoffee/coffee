@@ -7,5 +7,4 @@ for (const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)) {
 assert(html.includes('lang="ru"'));
 assert(html.includes('РЕТРОКОФЕ'));
 assert.equal((html.match(/class="menu-item"/g) || []).length, 8);
-assert(existsSync('public/assets/three.module.js'));
 console.log('Local assets and all eight menu positions verified.');

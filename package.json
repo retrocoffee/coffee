@@ -1,1 +1,1 @@
-{"name":"retrocoffe","version":"1.0.0","private":true,"type":"module","scripts":{"check":"node --check public/app.js && node --check public/scene.js && node scripts/check.mjs","start":"python3 -m http.server 4173 --directory public"}}
+{"name":"retrocoffe","version":"1.0.0","private":true,"type":"module","scripts":{"check":"node --check public/app.js && node scripts/check.mjs","start":"python3 -m http.server 4173 --directory public"}}

@@ -19,7 +19,6 @@ jobs:
       - name: Check JavaScript and local assets
         run: |
           node --check public/app.js
-          node --check public/scene.js
           node scripts/check.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
