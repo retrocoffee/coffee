@@ -179,3 +179,31 @@ if (carousel) {
   updatePlayback();
   requestAnimationFrame(tick);
 }
+
+
+// First tap reveals the review link; navigation requires a separate tap.
+const reviewWidget = document.querySelector('.review-widget');
+if (reviewWidget) {
+  const toggle = reviewWidget.querySelector('.review-toggle');
+  const panel = reviewWidget.querySelector('.review-panel');
+  const setReviewOpen = open => {
+    reviewWidget.classList.toggle('is-open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-label', open ? 'Свернуть ссылку для отзыва' : 'Открыть ссылку для отзыва');
+    panel.setAttribute('aria-hidden', String(!open));
+    panel.inert = !open;
+  };
+  toggle.addEventListener('click', () => setReviewOpen(toggle.getAttribute('aria-expanded') !== 'true'));
+  document.addEventListener('pointerdown', event => {
+    if (!reviewWidget.contains(event.target)) setReviewOpen(false);
+  });
+  reviewWidget.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
+      setReviewOpen(false);
+      toggle.focus();
+    }
+  });
+  reviewWidget.addEventListener('focusout', event => {
+    if (!reviewWidget.contains(event.relatedTarget)) setReviewOpen(false);
+  });
+}
