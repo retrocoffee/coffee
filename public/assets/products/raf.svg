@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 420" fill="none"><defs>
+    <radialGradient id="shadow"><stop stop-color="#3b2112" stop-opacity=".16"/><stop offset="1" stop-color="#3b2112" stop-opacity="0"/></radialGradient>
+    <linearGradient id="cup" x1="0" x2="1"><stop stop-color="#d9d4cc"/><stop offset=".24" stop-color="#fffefa"/><stop offset=".68" stop-color="#f4f1eb"/><stop offset="1" stop-color="#c8c1b6"/></linearGradient>
+    <linearGradient id="drink" x1="0" y1="1" x2=".65" y2="0"><stop stop-color="#b67f54"/><stop offset=".55" stop-color="#ead1a8"/><stop offset="1" stop-color="#fff4dc"/></linearGradient>
+    <radialGradient id="top"><stop stop-color="#ead1a8"/><stop offset=".75" stop-color="#b67f54"/><stop offset="1" stop-color="#53301d"/></radialGradient>
+    <linearGradient id="rim"><stop stop-color="#fffefa"/><stop offset="1" stop-color="#d3cabe"/></linearGradient>
+    </defs><ellipse cx="234" cy="365" rx="168" ry="32" fill="url(#shadow)"/><ellipse cx="228" cy="338" rx="139" ry="30" fill="url(#rim)"/>
+        <ellipse cx="228" cy="335" rx="114" ry="20" fill="#e8e1d7"/>
+        <path d="M317 178C408 153 406 267 320 272L316 249C375 243 375 190 317 201Z" fill="url(#cup)"/>
+        <path d="M117 164Q122 266 155 307Q225 349 296 307Q329 269 337 164Z" fill="url(#cup)"/>
+        <path d="M136 197Q142 273 171 300" fill="none" stroke="#fff" stroke-opacity=".72" stroke-width="8" stroke-linecap="round"/>
+        <ellipse cx="227" cy="164" rx="111" ry="46" fill="url(#rim)"/>
+        <ellipse cx="227" cy="164" rx="99" ry="36" fill="url(#top)"/>
+        <ellipse cx="227" cy="164" rx="98" ry="35" fill="none" stroke="#744423" stroke-opacity=".2" stroke-width="2"/><g fill="#fff4dc"><path d="M227 182C185 174 178 147 201 144C215 142 224 157 227 167C232 152 242 140 256 144C278 151 259 176 227 182Z"/>
+            <path d="M227 176C208 169 203 157 213 155C221 154 226 162 227 167C232 158 238 151 246 155C253 161 240 172 227 176Z" fill="url(#top)"/>
+            <path d="M227 198Q222 178 228 156Q229 180 227 198Z"/></g></svg>

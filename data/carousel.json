@@ -1,0 +1,38 @@
+[
+  {
+    "section": "coffee",
+    "group": "g2",
+    "item": "i2",
+    "image": "./assets/products/cappuccino.svg"
+  },
+  {
+    "section": "coffee",
+    "group": "g2",
+    "item": "i6",
+    "image": "./assets/products/latte.svg"
+  },
+  {
+    "section": "coffee",
+    "group": "g2",
+    "item": "i9",
+    "image": "./assets/products/raf.svg"
+  },
+  {
+    "section": "not-coffee",
+    "group": "g1",
+    "item": "i1",
+    "image": "./assets/products/matcha.svg"
+  },
+  {
+    "section": "iced-milk",
+    "group": "g1",
+    "item": "i1",
+    "image": "./assets/products/iced-latte.svg"
+  },
+  {
+    "section": "coffee",
+    "group": "g1",
+    "item": "i1",
+    "image": "./assets/products/espresso.svg"
+  }
+]

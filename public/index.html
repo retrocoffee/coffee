@@ -7,7 +7,7 @@
 <meta name="description" content="Меню кофейни РЕТРОКОФЕ: кофе, чай, сезонные и холодные напитки. Объёмы и цены.">
 <title>РЕТРОКОФЕ — меню</title>
 <link rel="icon" href="./assets/logo.svg" type="image/svg+xml">
-<link rel="stylesheet" href="./style.css?v=brand-image-20261021">
+<link rel="stylesheet" href="./style.css?v=carousel-20261022">
 </head>
 <body>
 <header class="brand">
@@ -15,14 +15,52 @@
 <img class="brand-title" src="./assets/text.svg" alt="Ретрокофе" width="1560" height="170">
 <div class="brand-line" aria-hidden="true"></div>
 </header>
+<!-- carousel:start -->
+<section class="product-carousel" aria-label="Напитки" aria-roledescription="карусель">
+<div class="carousel-window" aria-label="Листать напитки стрелками или свайпом">
+<div class="carousel-track"><article class="product-card">
+<img class="product-image" src="./assets/products/cappuccino.svg" alt="Капучино" width="460" height="420" decoding="async">
+<h2 class="product-name">Капучино</h2>
+<p class="product-meta"><span class="product-price">220 ₽</span><span class="product-volume">200 мл</span></p>
+</article><article class="product-card">
+<img class="product-image" src="./assets/products/latte.svg" alt="Латте" width="460" height="420" decoding="async">
+<h2 class="product-name">Латте</h2>
+<p class="product-meta"><span class="product-price">220 ₽</span><span class="product-volume">200 мл</span></p>
+</article><article class="product-card">
+<img class="product-image" src="./assets/products/raf.svg" alt="Раф классический" width="460" height="420" decoding="async">
+<h2 class="product-name">Раф классический</h2>
+<p class="product-meta"><span class="product-price">240 ₽</span><span class="product-volume">200 мл</span></p>
+</article><article class="product-card">
+<img class="product-image" src="./assets/products/matcha.svg" alt="Матча-латте" width="460" height="420" decoding="async">
+<h2 class="product-name">Матча-латте</h2>
+<p class="product-meta"><span class="product-price">220 ₽</span><span class="product-volume">200 мл</span></p>
+</article><article class="product-card">
+<img class="product-image" src="./assets/products/iced-latte.svg" alt="Айс латте" width="460" height="420" decoding="async">
+<h2 class="product-name">Айс латте</h2>
+<p class="product-meta"><span class="product-price">250 ₽</span><span class="product-volume">400 мл</span></p>
+</article><article class="product-card">
+<img class="product-image" src="./assets/products/espresso.svg" alt="Эспрессо" width="460" height="420" decoding="async">
+<h2 class="product-name">Эспрессо</h2>
+<p class="product-meta"><span class="product-price">110 ₽</span><span class="product-volume">36 мл</span></p>
+</article></div>
+</div>
+<button class="carousel-arrow carousel-previous" type="button" aria-label="Предыдущая позиция" hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"><path d="m14 5-7 7 7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<button class="carousel-arrow carousel-next" type="button" aria-label="Следующая позиция" hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"><path d="m14 5-7 7 7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<button class="carousel-playback" type="button" aria-label="Приостановить автопролистывание" aria-pressed="false" hidden>
+<svg class="pause-symbol" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M5 3v10M11 3v10" stroke="currentColor" stroke-width="2"/></svg>
+<svg class="play-symbol" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m5 3 8 5-8 5Z" fill="currentColor"/></svg>
+</button>
+<span class="visually-hidden carousel-status" aria-live="polite" aria-atomic="true"></span>
+</section>
+<!-- carousel:end -->
 <main class="menu" aria-label="Меню кофейни">
 <details class="menu-category" name="coffee-menu" id="seasonal">
-<summary><span>Сезонное меню</span><span class="expand-icon" aria-hidden="true"></span></summary>
+<summary><span>ОСЕНЬ ВКУСНО</span><span class="expand-icon" aria-hidden="true"></span></summary>
 <div class="category-content">
 <table class="price-table drinks"><caption class="visually-hidden">Сезонное меню</caption>
 <thead><tr><th scope="col"><span class="visually-hidden">Напиток</span></th><th scope="col">300 мл</th></tr></thead>
 <tbody>
-<tr><th scope="row">Глинтвейн безалкогольный<span class="item-note">насыщенный вкус клюквы, корицы, гвоздики и апельсина</span></th><td>280 ₽</td></tr>
+<tr><th scope="row">Глинтвейн безалкогольный<span class="item-note">насыщенный вкус клюквы, корицы, гвоздики и апельсина</span></th><td>300 ₽</td></tr>
 <tr><th scope="row">Сбитень<span class="item-note">мёд, облепиха, базилик, душица, мята, корица, имбирь, кориандр, гвоздика, зверобой, корень аира, кардамон, мускатный орех, корень солодки, апельсин</span></th><td>280 ₽</td></tr>
 <tr><th scope="row">Раф пряная тыква</th><td>280 ₽</td></tr>
 <tr><th scope="row">Имбирный какао с зефирками</th><td>290 ₽</td></tr>
@@ -157,6 +195,6 @@
 </div></details>
 </main>
 <div class="end-line" aria-hidden="true"></div>
-<script src="./app.js?v=menu-scroll-20261021" defer></script>
+<script src="./app.js?v=carousel-20261022" defer></script>
 </body>
 </html>
