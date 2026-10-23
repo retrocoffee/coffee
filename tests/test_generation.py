@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from PIL import Image
 from bot.generation import MAX_RESPONSE_BYTES, generate_image
+from bot.generation_settings import DEFAULTS
 from bot.images import prepare_image
 from bot.telegram_bot import Bot, fingerprint
 from support import sample_menu
@@ -25,6 +26,7 @@ def image_bytes():
 
 class GenerationAPITests(unittest.TestCase):
     def setUp(self):
+        self.enterContext(patch('bot.generation_settings.load', side_effect=lambda: dict(DEFAULTS)))
         # Expected provider failures belong to the tests, not the bot's run log.
         # assertLogs below can still capture and check the real diagnostic text.
         logger = logging.getLogger('menu-bot.generation')
@@ -175,6 +177,7 @@ class GenerationAPITests(unittest.TestCase):
 
 class GenerationBotTests(unittest.TestCase):
     def setUp(self):
+        self.enterContext(patch('bot.generation_settings.load', side_effect=lambda: dict(DEFAULTS)))
         self.env = patch.dict(os.environ, TELEGRAM_BOT_TOKEN='test', TELEGRAM_ADMIN_IDS='123,456', CLOUDFLARE_API_TOKEN='test-only-key', CLOUDFLARE_ACCOUNT_ID='a' * 32)
         self.env.start()
         self.addCleanup(self.env.stop)

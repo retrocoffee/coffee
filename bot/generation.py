@@ -8,8 +8,8 @@ import re
 import urllib.error
 import urllib.request
 from bot.images import MAX_IMAGE_BYTES, prepare_image
+from bot import generation_settings as preferences
 
-DEFAULT_MODEL = '@cf/black-forest-labs/flux-1-schnell'
 LOG = logging.getLogger('menu-bot.generation')
 MAX_DESCRIPTION = 1500
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
@@ -64,7 +64,7 @@ def provider_error(status, codes):
     elif status == 403:
         message = 'Нет доступа к Workers AI. Проверьте Account ID и разрешения токена Workers AI Read / Edit для этого аккаунта.'
     elif codes.intersection({'5007', '3042'}) or status == 404:
-        message = 'Cloudflare не нашёл модель или адрес API. Проверьте Account ID и доступность модели FLUX.1 schnell.'
+        message = 'Cloudflare не нашёл модель или адрес API. Проверьте Account ID и доступность выбранной модели в Workers AI.'
     elif status == 429 or '3040' in codes:
         message = 'Cloudflare сообщил о лимите или высокой нагрузке. Проверьте квоту Workers AI и попробуйте позже.'
     elif status in (408, 504) or codes.intersection({'3007', '3008'}):
@@ -78,24 +78,26 @@ def provider_error(status, codes):
     return ValueError(message + '\n\nДиагностика: ' + details + '.')
 
 
-def generate_image(name, description):
+def generate_image(name, description, settings=None):
     description = description_text(description)
+    settings = preferences.validate(settings if settings is not None else preferences.load())
+    model = preferences.MODELS[settings['model']]
     if not available():
         raise ValueError(SETUP_MESSAGE)
     token = os.environ['CLOUDFLARE_API_TOKEN'].strip()
     account = os.environ['CLOUDFLARE_ACCOUNT_ID'].strip()
     # Keep the style and all validated product data inside FLUX's 2048-character limit.
-    prompt = ('A small cafe menu illustration. Minimalist black and gray ink line drawing, '
-              'clear silhouette at 30px. One drink or ingredient composition, centered and fully '
-              'visible on pure white. No text, prices, labels, logos, watermark, frame or scenery. '
+    prompt = ('Cafe menu image. ' + preferences.STYLES[settings['style']][1] + ' '
+              + preferences.COLORS[settings['color']][1] + ' '
+              'One drink or ingredient composition, centered and fully visible on pure white. '
+              'No text, prices, labels, logos, watermark, frame or scenery. '
               f'Product: {name}\nDescription: {description}')
     if len(prompt) > 2048:
         raise ValueError('Описание вместе с названием слишком длинное. Сократите описание картинки.')
-    # FLUX's input schema documents prompt and steps only. Let the model choose
-    # its randomness instead of sending an unsupported seed parameter.
-    payload = {'prompt': prompt, 'steps': 4}
+    # Each allowed model has its own documented input and response format.
+    payload = {'prompt': prompt, **model['payload']}
     request = urllib.request.Request(
-        f'https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{DEFAULT_MODEL}',
+        f'https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model["id"]}',
         data=json.dumps(payload).encode(), headers={'Authorization': 'Bearer ' + token,
                                                   'Content-Type': 'application/json'}, method='POST')
     try:
@@ -113,6 +115,9 @@ def generate_image(name, description):
         raise ValueError('Не удалось дождаться Cloudflare. Автоматического повтора не будет; запрос мог израсходовать квоту. Повторить можно кнопкой.') from None
     if len(raw) > MAX_RESPONSE_BYTES:
         raise ValueError('Cloudflare вернул слишком большой ответ. Попробуйте другой вариант.')
+    if model['binary'] and (raw.startswith(b'\x89PNG\r\n\x1a\n') or raw.startswith(b'\xff\xd8\xff')
+                            or raw.startswith(b'RIFF') and raw[8:12] == b'WEBP'):
+        return prepare_image(raw)
     try:
         data = json.loads(raw)
     except (ValueError, TypeError):

@@ -18,6 +18,7 @@ from bot.menu import MENU_PATH, encode, load, prices, validate
 from bot.images import MAX_IMAGE_BYTES, prepare_image, valid_image_path
 from bot.generation import SETUP_MESSAGE, available, description_text, generate_image
 from bot import site as cafe
+from bot import generation_settings as artwork
 
 LOG = logging.getLogger('menu-bot')
 
@@ -27,6 +28,7 @@ REPLY_ACTIONS = {
     '🕘 История меню': 'history',
     '✖ Отмена': 'home',
     'ℹ О кофейне': 'site',
+    '⚙ Генерация': 'generation-settings',
 }
 
 
@@ -47,6 +49,35 @@ def fingerprint(menu):
 
 def site_fingerprint(profile):
     return hashlib.sha256(cafe.encode(profile).encode()).hexdigest()
+
+
+def generation_fingerprint(settings):
+    return hashlib.sha256(artwork.encode(settings).encode()).hexdigest()
+
+
+def publish_generation_settings(settings, baseline, update_id):
+    """Commit just shared preferences, preserving concurrent menu and site edits."""
+    artwork.validate(settings)
+    git('fetch', 'origin', 'main')
+    remote = artwork.validate(json.loads(git('show', f'FETCH_HEAD:{artwork.SETTINGS_PATH}')))
+    if generation_fingerprint(remote) != baseline:
+        raise ValueError('Настройки генерации уже изменились. Откройте /start → «Настройки генерации» и повторите правку.')
+    git('merge', '--ff-only', 'FETCH_HEAD')
+    if generation_fingerprint(settings) == generation_fingerprint(remote):
+        return False
+    try:
+        artwork.SETTINGS_PATH.write_text(artwork.encode(settings))
+        git('add', '--', str(artwork.SETTINGS_PATH))
+        git('commit', '-m', 'Обновление настроек генерации', '-m', f'Telegram-update: {update_id}')
+    except Exception:
+        git('restore', '--staged', '--worktree', str(artwork.SETTINGS_PATH))
+        raise
+    try:
+        git('push', 'origin', 'HEAD:main')
+    except Exception:
+        git('reset', '--hard', 'HEAD^')
+        raise ValueError('Не удалось сохранить настройки в GitHub. Откройте /start и повторите правку.') from None
+    return True
 
 
 def publish_site(profile, baseline, update_id, description):
@@ -188,7 +219,7 @@ class Bot:
                 'keyboard': [
                     [{'text': '🏠 Главное меню'}, {'text': '📥 Массовая загрузка'}],
                     [{'text': '🕘 История меню'}, {'text': '✖ Отмена'}],
-                    [{'text': 'ℹ О кофейне'}],
+                    [{'text': 'ℹ О кофейне'}, {'text': '⚙ Генерация'}],
                 ],
                 'resize_keyboard': True,
                 'is_persistent': True,
@@ -312,7 +343,8 @@ class Bot:
         buttons = [(('🙈 ' if s['hidden'] else '') + s['name'], ('section', s['id'])) for s in sections[page*15:(page+1)*15]]
         if page: buttons.append(('← Предыдущие разделы', ('home', page-1)))
         if (page+1)*15 < len(sections): buttons.append(('Следующие разделы →', ('home', page+1)))
-        buttons += [('ℹ Сведения о кофейне', ('site',)), ('📥 Массовая загрузка', ('bulk-mode',)),
+        buttons += [('⚙ Настройки генерации', ('generation-settings',)),
+                    ('ℹ Сведения о кофейне', ('site',)), ('📥 Массовая загрузка', ('bulk-mode',)),
                     ('＋ Раздел', ('input', 'section-add')), ('🕘 История меню', ('history', 0)),
                     ('↻ Опубликовать повторно', ('deploy',))]
         self.send(uid, 'Управление меню\nВыберите раздел. 🙈 — скрыт с сайта.\n/start — обновить меню, /cancel — отменить ввод.', buttons)
@@ -525,6 +557,49 @@ class Bot:
             job['cancelled'] = True
             job['future'].cancel()
 
+    def generation_settings_open(self, uid, *ids):
+        self.cancel_generation(uid)
+        state = self.sessions[uid]
+        state.pop('input', None)
+        settings = artwork.load()
+        state['artwork_draft'] = settings
+        state['artwork_base'] = generation_fingerprint(settings)
+        state['artwork_context'] = tuple(ids)
+        self.generation_settings_show(uid)
+
+    def generation_settings_show(self, uid, field=None, notice=''):
+        state = self.sessions[uid]
+        settings = state['artwork_draft']
+        if field:
+            buttons = [(('✓ ' if settings[field] == key else '') + name,
+                        ('generation-option', field, key)) for key, name in artwork.choices(field).items()]
+            buttons.append(('← Настройки генерации', ('generation-settings-show',)))
+            note = ('\nДоступность моделей и расход квоты зависят от аккаунта Cloudflare.' if field == 'model' else '')
+            return self.send(uid, artwork.FIELDS[field] + '\nВыберите вариант, затем сохраните настройки.' + note, buttons)
+        pending = generation_fingerprint(settings) != state['artwork_base']
+        self.send(uid, 'Настройки генерации\n\n' + artwork.summary(settings)
+                  + '\n\nОбщие для всех администраторов. Применяются к новым запросам после сохранения. '
+                    'Белый фон и отсутствие надписей сохраняются. '
+                    'Смена настроек не запускает генерацию и не меняет готовые картинки.'
+                  + ('\n\nЕсть несохранённые изменения.' if pending else '')
+                  + ('\n\n' + notice if notice else ''),
+                  [(label + ': ' + artwork.choices(key)[settings[key]], ('generation-settings-show', key))
+                   for key, label in artwork.FIELDS.items()]
+                  + [('✓ Сохранить настройки', ('generation-settings-save',)),
+                     ('← Вернуться' if not pending else 'Отмена изменений', ('generation-settings-back',))])
+
+    def generation_settings_back(self, uid):
+        state = self.sessions[uid]
+        ids = state.pop('artwork_context', ())
+        state.pop('artwork_draft', None)
+        state.pop('artwork_base', None)
+        if ids:
+            request = state.get('generation_request')
+            if request and request['ids'] == ids:
+                return self.generation_review(uid, ids, request['prompt'])
+            return self.generation_ask(uid, *ids)
+        return self.home(uid)
+
     def generation_ask(self, uid, *ids):
         self.cancel_generation(uid)
         _, _, item = self.find(uid, *ids)
@@ -535,23 +610,28 @@ class Bot:
         state.pop('generation_request', None)
         current = '\n'.join(item['notes']) or item['name']
         self.send(uid, item['name'] + '\n\nОпишите, что нарисовать: напиток, посуду, ингредиенты. '
-                  'Бот создаст маленькую чёрно-белую иллюстрацию на белом фоне. '
+                  'Цветность, стиль и модель можно выбрать в настройках ниже. '
                   'Описание позиции можно использовать без изменений.\n\n'
-                  'Текущее описание:\n' + current[:1500] + '\n\nГенерация через Cloudflare Workers AI. '
+                  'Текущее описание:\n' + current[:1500] + '\n\n' + artwork.summary(artwork.load())
+                  + '\n\nГенерация через Cloudflare Workers AI. '
                   'Запрос будет отправлен после нажатия «Сгенерировать».',
                   [('Использовать описание позиции', ('generation-current', *ids)),
+                   ('⚙ Настройки генерации', ('generation-settings', *ids)),
                    ('← Картинка позиции', ('image', *ids))])
 
-    def generation_review(self, uid, ids, raw):
+    def generation_review(self, uid, ids, raw, settings=None):
         prompt = description_text(raw)
+        settings = artwork.validate(settings if settings is not None else artwork.load())
         _, _, item = self.find(uid, *ids)
         state = self.sessions[uid]
         state.pop('input', None)
-        state['generation_request'] = {'ids': tuple(ids), 'prompt': prompt}
+        state['generation_request'] = {'ids': tuple(ids), 'prompt': prompt, 'settings': settings}
         self.send(uid, 'Генерация: ' + item['name'] + '\n\n' + prompt
+                  + '\n\n' + artwork.summary(settings)
                   + '\n\nОдин вариант через Cloudflare. На Workers Free действует бесплатная дневная квота. '
                     'Картинка появится на сайте только после «Сохранить».',
                   [('✨ Сгенерировать', ('generation-start',)),
+                   ('⚙ Настройки генерации', ('generation-settings', *ids)),
                    ('✎ Изменить описание', ('generation-ask', *ids)),
                    ('← Картинка позиции', ('image', *ids))])
 
@@ -569,9 +649,10 @@ class Bot:
         request = copy.deepcopy(state['generation_request'])
         _, _, item = self.find(uid, *request['ids'])
         self.send(uid, 'Создаю картинку для «' + item['name'] + '». Обычно это занимает до нескольких минут. '
+                  + '\n\n' + artwork.summary(request['settings']) + '\n\n'
                   'Меню бота остаётся доступным. Отмена уберёт результат; запрос уже может израсходовать квоту Cloudflare.',
                   [('Отмена', ('image', *request['ids']))])
-        future = self.generation_pool.submit(generate_image, item['name'], request['prompt'])
+        future = self.generation_pool.submit(generate_image, item['name'], request['prompt'], request['settings'])
         self.generations[uid] = {'future': future, 'state': state, 'request': request, 'cancelled': False}
 
     def poll_generations(self):
@@ -591,6 +672,7 @@ class Bot:
                              assets={image: content}, generated=request)
             except ValueError as error:
                 self.send(uid, str(error), [('Повторить запуск', ('generation-start',)),
+                                           ('⚙ Настройки генерации', ('generation-settings', *request['ids'])),
                                            ('Изменить описание', ('generation-ask', *request['ids'])),
                                            ('← Картинка позиции', ('image', *request['ids']))])
                 continue
@@ -745,6 +827,20 @@ class Bot:
         if op == 'group': return self.group(uid, *args)
         if op == 'item': return self.item(uid, *args)
         if op == 'image': return self.image(uid, *args)
+        if op == 'generation-settings': return self.generation_settings_open(uid, *args)
+        if op == 'generation-settings-show': return self.generation_settings_show(uid, *args)
+        if op == 'generation-option':
+            field, value = args
+            if value not in artwork.choices(field):
+                raise ValueError('Неизвестный вариант настройки генерации.')
+            self.sessions[uid]['artwork_draft'][field] = value
+            return self.generation_settings_show(uid)
+        if op == 'generation-settings-back': return self.generation_settings_back(uid)
+        if op == 'generation-settings-save':
+            state = self.sessions[uid]
+            changed = publish_generation_settings(state['artwork_draft'], state['artwork_base'], update_id)
+            state['artwork_base'] = generation_fingerprint(state['artwork_draft'])
+            return self.generation_settings_show(uid, notice='Сохранено в GitHub. Новые генерации используют эти настройки.' if changed else 'Изменений нет.')
         if op == 'generation-ask': return self.generation_ask(uid, *args)
         if op == 'generation-current':
             _, _, item = self.find(uid, *args)
@@ -753,7 +849,7 @@ class Bot:
         if op == 'generation-preview': return self.send_generated_preview(uid)
         if op == 'generation-again':
             request = self.sessions[uid]['generated']
-            return self.generation_review(uid, request['ids'], request['prompt'])
+            return self.generation_review(uid, request['ids'], request['prompt'], request['settings'])
         if op == 'input': return self.ask(uid, *args)
         if op == 'bulk-mode':
             return self.send(uid, 'Выберите режим массовой загрузки. Все изменения сохраняются одним подтверждением.',
