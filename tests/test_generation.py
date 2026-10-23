@@ -24,7 +24,7 @@ def image_bytes():
 
 class GenerationAPITests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict(os.environ, OPENAI_API_KEY='test-only-key', OPENAI_IMAGE_MODEL='')
+        self.env = patch.dict(os.environ, CLOUDFLARE_API_TOKEN='test-only-key', CLOUDFLARE_ACCOUNT_ID='a' * 32)
         self.env.start()
         self.addCleanup(self.env.stop)
 
@@ -35,21 +35,22 @@ class GenerationAPITests(unittest.TestCase):
         response.read.return_value = content
         return response
 
-    def test_single_billable_call_uses_documented_api_and_normalizes_image(self):
-        data = json.dumps({'data': [{'b64_json': base64.b64encode(image_bytes()).decode()}]}).encode()
+    def test_single_cloudflare_call_uses_documented_api_and_normalizes_image(self):
+        data = json.dumps({'success': True, 'result': {'image': base64.b64encode(image_bytes()).decode()}}).encode()
         response = self.response(data)
         with patch('bot.generation.urllib.request.urlopen', return_value=response) as call:
             path, content = generate_image('Латте', 'В стеклянной кружке, с пеной')
         self.assertEqual(call.call_count, 1)
         request = call.call_args.args[0]
-        self.assertEqual(request.full_url, 'https://api.openai.com/v1/images/generations')
+        self.assertEqual(request.full_url, 'https://api.cloudflare.com/client/v4/accounts/' + 'a' * 32 + '/ai/run/@cf/black-forest-labs/flux-1-schnell')
         self.assertEqual(request.get_header('Authorization'), 'Bearer test-only-key')
         payload = json.loads(request.data)
-        self.assertEqual(payload['n'], 1)
-        self.assertEqual(payload['background'], 'transparent')
-        self.assertEqual(payload['model'], 'gpt-image-1-mini')
-        self.assertEqual(payload['output_format'], 'webp')
-        self.assertNotIn('response_format', payload)
+        self.assertEqual(payload['steps'], 4)
+        self.assertIsInstance(payload['seed'], int)
+        self.assertGreaterEqual(payload['seed'], 0)
+        self.assertLess(payload['seed'], 2**32)
+        self.assertIn('pure white', payload['prompt'])
+        self.assertEqual(set(payload), {'prompt', 'steps', 'seed'})
         self.assertIn('Латте', payload['prompt'])
         self.assertIn('В стеклянной кружке', payload['prompt'])
         response.read.assert_called_once_with(MAX_RESPONSE_BYTES + 1)
@@ -59,14 +60,43 @@ class GenerationAPITests(unittest.TestCase):
         with patch('bot.generation.urllib.request.urlopen') as call:
             for raw in ['', ' ' * 10, 'x' * 1501]:
                 with self.assertRaises(ValueError): generate_image('Латте', raw)
-            with patch.dict(os.environ, OPENAI_API_KEY=''), self.assertRaisesRegex(ValueError, 'OPENAI_API_KEY'):
+            with patch.dict(os.environ, CLOUDFLARE_API_TOKEN=''), self.assertRaisesRegex(ValueError, 'CLOUDFLARE_API_TOKEN'):
                 generate_image('Латте', 'Описание')
             call.assert_not_called()
 
+    def test_missing_or_malformed_account_and_old_key_never_trigger_fallback(self):
+        with patch('bot.generation.urllib.request.urlopen') as call:
+            for account in ['', '../another-account', 'not-an-account-id', 'a' * 31, 'https://other.invalid']:
+                with patch.dict(os.environ, CLOUDFLARE_ACCOUNT_ID=account, OPENAI_API_KEY='old-unused-key'):
+                    with self.assertRaisesRegex(ValueError, 'CLOUDFLARE_ACCOUNT_ID'):
+                        generate_image('Латте', 'Описание')
+            call.assert_not_called()
+
+    def test_documented_quota_error_is_recognized_without_retry(self):
+        raw = json.dumps({'success': False, 'errors': [{'code': 3036, 'message': 'private-account-details'}]}).encode()
+        for status in [200, 429]:
+            with self.subTest(status=status):
+                effect = urllib.error.HTTPError('https://api.cloudflare.com', status, 'error', {}, io.BytesIO(raw))
+                with patch('bot.generation.urllib.request.urlopen', **({'return_value': self.response(raw)} if status == 200 else {'side_effect': effect})) as call:
+                    with self.assertRaisesRegex(ValueError, '00:00 UTC') as caught:
+                        generate_image('Латте', 'Описание')
+                    self.assertNotIn('private-account-details', str(caught.exception))
+                    self.assertEqual(call.call_count, 1)
+
+    def test_direct_model_response_and_new_seed_for_each_variant(self):
+        raw = json.dumps({'image': base64.b64encode(image_bytes()).decode()}).encode()
+        with patch('bot.generation.secrets.randbelow', side_effect=[10, 20]), patch('bot.generation.urllib.request.urlopen', return_value=self.response(raw)) as call:
+            for _ in range(2):
+                generate_image('К' * 200, 'я' * 1500)
+        payloads = [json.loads(args.args[0].data) for args in call.call_args_list]
+        self.assertEqual([p['seed'] for p in payloads], [10, 20])
+        self.assertTrue(all(len(p['prompt']) <= 2048 for p in payloads))
+        self.assertTrue(all('я' * 1500 in p['prompt'] for p in payloads))
+
     def test_errors_do_not_leak_provider_body_or_retry(self):
         for status in [400, 401, 403, 429, 500]:
-            body = io.BytesIO(b'{"error":{"message":"sensitive-provider-body-test-only-key"}}')
-            error = urllib.error.HTTPError('https://api.openai.com/v1/images/generations', status, 'error', {}, body)
+            body = io.BytesIO(json.dumps({"success": False, "errors": [{"code": 9999, "message": "sensitive-provider-body-test-only-key"}]}).encode())
+            error = urllib.error.HTTPError('https://api.cloudflare.com/client/v4/accounts/' + 'a' * 32 + '/ai/run/@cf/black-forest-labs/flux-1-schnell', status, 'error', {}, body)
             with self.subTest(status=status), patch('bot.generation.urllib.request.urlopen', side_effect=error) as call:
                 with self.assertRaises(ValueError) as caught: generate_image('Латте', 'Описание')
                 self.assertNotIn('sensitive-provider-body', str(caught.exception))
@@ -78,9 +108,9 @@ class GenerationAPITests(unittest.TestCase):
             self.assertEqual(call.call_count, 1)
 
     def test_bad_base64_urls_and_oversize_responses_are_rejected(self):
-        replies = [b'not-json', b'{"data":[]}', b'{"data":[{"url":"https://untrusted.invalid/photo"}]}',
-                   b'{"data":[{"b64_json":"!bad!"}]}',
-                   json.dumps({'data': [{'b64_json': base64.b64encode(b'not-an-image').decode()}]}).encode()]
+        replies = [b'not-json', b'{"result":[]}', b'{"result":{"url":"https://untrusted.invalid/photo"}}',
+                   b'{"result":{"image":"!bad!"}}',
+                   json.dumps({'result': {'image': base64.b64encode(b'not-an-image').decode()}}).encode()]
         for raw in replies:
             with self.subTest(raw=raw[:50]), patch('bot.generation.urllib.request.urlopen', return_value=self.response(raw)) as call:
                 with self.assertRaises(ValueError): generate_image('Латте', 'Описание')
@@ -91,7 +121,7 @@ class GenerationAPITests(unittest.TestCase):
 
 class GenerationBotTests(unittest.TestCase):
     def setUp(self):
-        self.env = patch.dict(os.environ, TELEGRAM_BOT_TOKEN='test', TELEGRAM_ADMIN_IDS='123,456', OPENAI_API_KEY='test-only-key')
+        self.env = patch.dict(os.environ, TELEGRAM_BOT_TOKEN='test', TELEGRAM_ADMIN_IDS='123,456', CLOUDFLARE_API_TOKEN='test-only-key', CLOUDFLARE_ACCOUNT_ID='a' * 32)
         self.env.start()
         self.addCleanup(self.env.stop)
         self.bot = Bot()
@@ -113,7 +143,7 @@ class GenerationBotTests(unittest.TestCase):
         self.bot.generation_ask(uid, *self.ids)
         self.bot.input(uid, 'Кружка горячего какао с зефирками')
 
-    def test_description_is_reviewed_before_any_paid_request(self):
+    def test_description_is_reviewed_before_any_generation_request(self):
         self.request()
         self.bot.generation_pool.submit.assert_not_called()
         self.assertEqual(self.bot.sessions[123]['generation_request']['ids'], self.ids)
@@ -190,11 +220,11 @@ class GenerationBotTests(unittest.TestCase):
         self.bot.generation_pool.submit.assert_not_called()
 
     def test_missing_key_keeps_manual_upload_available(self):
-        with patch.dict(os.environ, OPENAI_API_KEY=''):
+        with patch.dict(os.environ, CLOUDFLARE_API_TOKEN=''):
             self.bot.image(123, *self.ids)
             self.assertTrue(any(action[0] == 'input' for _, action in self.bot.send.call_args.args[2]))
             self.bot.generation_ask(123, *self.ids)
-            self.assertIn('OPENAI_API_KEY', self.bot.send.call_args.args[1])
+            self.assertIn('CLOUDFLARE_API_TOKEN', self.bot.send.call_args.args[1])
             self.bot.generation_pool.submit.assert_not_called()
 
     def test_new_position_save_has_direct_image_button(self):

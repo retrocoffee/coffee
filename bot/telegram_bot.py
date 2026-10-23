@@ -378,9 +378,9 @@ class Bot:
         state.pop('generation_request', None)
         current = '\n'.join(item['notes']) or item['name']
         self.send(uid, item['name'] + '\n\nОпишите, что нарисовать: напиток, посуду, ингредиенты. '
-                  'Бот создаст маленькую чёрно-белую иллюстрацию с прозрачным фоном. '
+                  'Бот создаст маленькую чёрно-белую иллюстрацию на белом фоне. '
                   'Описание позиции можно использовать без изменений.\n\n'
-                  'Текущее описание:\n' + current[:1500] + '\n\nOpenAI API оплачивается отдельно. '
+                  'Текущее описание:\n' + current[:1500] + '\n\nГенерация через Cloudflare Workers AI. '
                   'Запрос будет отправлен после нажатия «Сгенерировать».',
                   [('Использовать описание позиции', ('generation-current', *ids)),
                    ('← Картинка позиции', ('image', *ids))])
@@ -392,7 +392,7 @@ class Bot:
         state.pop('input', None)
         state['generation_request'] = {'ids': tuple(ids), 'prompt': prompt}
         self.send(uid, 'Генерация: ' + item['name'] + '\n\n' + prompt
-                  + '\n\nОдин вариант через OpenAI API. Запрос оплачивается по тарифу вашего API-проекта. '
+                  + '\n\nОдин вариант через Cloudflare. На Workers Free действует бесплатная дневная квота. '
                     'Картинка появится на сайте только после «Сохранить».',
                   [('✨ Сгенерировать', ('generation-start',)),
                    ('✎ Изменить описание', ('generation-ask', *ids)),
@@ -412,7 +412,7 @@ class Bot:
         request = copy.deepcopy(state['generation_request'])
         _, _, item = self.find(uid, *request['ids'])
         self.send(uid, 'Создаю картинку для «' + item['name'] + '». Обычно это занимает до нескольких минут. '
-                  'Меню бота остаётся доступным. Отмена уберёт результат; уже отправленный запрос API может быть оплачен.',
+                  'Меню бота остаётся доступным. Отмена уберёт результат; запрос уже может израсходовать квоту Cloudflare.',
                   [('Отмена', ('image', *request['ids']))])
         future = self.generation_pool.submit(generate_image, item['name'], request['prompt'])
         self.generations[uid] = {'future': future, 'state': state, 'request': request, 'cancelled': False}
