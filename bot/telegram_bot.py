@@ -1,6 +1,7 @@
 """Private Telegram menu admin. Run only in the dedicated Actions checkout."""
 import copy
 import hashlib
+import io
 import json
 import logging
 import os
@@ -11,9 +12,11 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from bot.bulk import MAX_BYTES, apply_csv, export_csv
 from bot.menu import MENU_PATH, encode, load, prices, validate
 from bot.images import MAX_IMAGE_BYTES, prepare_image, valid_image_path
+from bot.generation import SETUP_MESSAGE, available, description_text, generate_image
 
 LOG = logging.getLogger('menu-bot')
 
@@ -117,6 +120,8 @@ class Bot:
             self.messages = {}
         self.documents = {}
         self.reply_users = set()
+        self.generation_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='menu-image')
+        self.generations = {}
         self.running = True
 
     def api(self, method, payload):
@@ -195,6 +200,9 @@ class Bot:
                 self.messages[str(uid)] = result['message_id']
         self.callbacks = {k: v for k, v in self.callbacks.items() if v[0] != uid}
         self.callbacks.update(callbacks)
+        preview_id = self.messages.pop(f'preview:{uid}', None)
+        if preview_id:
+            self.delete_message(uid, preview_id)
         self.message_file.parent.mkdir(exist_ok=True)
         self.message_file.write_text(json.dumps(self.messages))
         for message_id in self.documents.pop(uid, []):
@@ -259,6 +267,7 @@ class Bot:
                      assets={image: content})
 
     def refresh(self, uid):
+        self.cancel_generation(uid)
         git('fetch', 'origin', 'main')
         git('merge', '--ff-only', 'FETCH_HEAD')
         menu = load()
@@ -317,21 +326,25 @@ class Bot:
         return s,g,i
 
     def image(self, uid, sid, gid, iid):
+        self.cancel_generation(uid)
         state = self.sessions[uid]
-        for key in ('input', 'draft', 'draft_assets'):
+        for key in ('input', 'draft', 'draft_assets', 'generated', 'generation_request', 'created_item'):
             state.pop(key, None)
         _, _, item = self.find(uid, sid, gid, iid)
         buttons = [('🖼 Заменить картинку' if item.get('image') else '＋ Добавить картинку', ('input', 'image', sid, gid, iid))]
+        buttons.append(('✨ Сгенерировать по описанию', ('generation-ask', sid, gid, iid)))
         if item.get('image'):
             buttons.append(('↺ Стандартная иконка', ('image-reset', sid, gid, iid)))
         buttons.append(('← Позиция', ('item', sid, gid, iid)))
         self.send(uid, item['name'] + '\n\n' + ('Загружена своя картинка.' if item.get('image') else 'Сейчас показана стандартная иконка.')
                   + '\nМожно загрузить фото или файл JPG, PNG, WebP до 5 МБ.', buttons)
 
-    def preview(self, uid, menu, description, changes=None, assets=None):
+    def preview(self, uid, menu, description, changes=None, assets=None, generated=None, created_item=None):
         validate(menu)
         self.sessions[uid]['draft'] = (menu, description)
         self.sessions[uid]['draft_assets'] = assets or {}
+        self.sessions[uid]['generated'] = generated
+        self.sessions[uid]['created_item'] = created_item
         self.sessions[uid].pop('input', None)
         self.sessions[uid]['bulk_changes'] = changes or []
         self.show_preview(uid)
@@ -340,13 +353,128 @@ class Bot:
         state = self.sessions[uid]
         _, description = state['draft']
         buttons = [('✓ Сохранить', ('save',))]
+        if state.get('generated'):
+            buttons += [('🖼 Показать картинку', ('generation-preview',)),
+                        ('↻ Ещё вариант', ('generation-again',))]
         if state.get('bulk_changes'):
             buttons.insert(0, ('📋 Все изменения', ('bulk-preview', 0)))
         buttons.append(('Отмена', ('home',)))
         self.send(uid, description + '\n\nСохранить и опубликовать? Предыдущая версия останется в истории.',
                   buttons)
 
+    def cancel_generation(self, uid):
+        job = self.generations.get(uid)
+        if job:
+            job['cancelled'] = True
+            job['future'].cancel()
+
+    def generation_ask(self, uid, *ids):
+        self.cancel_generation(uid)
+        _, _, item = self.find(uid, *ids)
+        if not available():
+            return self.send(uid, SETUP_MESSAGE, [('← Картинка позиции', ('image', *ids))])
+        state = self.sessions[uid]
+        state['input'] = ('generation', ids)
+        state.pop('generation_request', None)
+        current = '\n'.join(item['notes']) or item['name']
+        self.send(uid, item['name'] + '\n\nОпишите, что нарисовать: напиток, посуду, ингредиенты. '
+                  'Бот создаст маленькую чёрно-белую иллюстрацию с прозрачным фоном. '
+                  'Описание позиции можно использовать без изменений.\n\n'
+                  'Текущее описание:\n' + current[:1500] + '\n\nOpenAI API оплачивается отдельно. '
+                  'Запрос будет отправлен после нажатия «Сгенерировать».',
+                  [('Использовать описание позиции', ('generation-current', *ids)),
+                   ('← Картинка позиции', ('image', *ids))])
+
+    def generation_review(self, uid, ids, raw):
+        prompt = description_text(raw)
+        _, _, item = self.find(uid, *ids)
+        state = self.sessions[uid]
+        state.pop('input', None)
+        state['generation_request'] = {'ids': tuple(ids), 'prompt': prompt}
+        self.send(uid, 'Генерация: ' + item['name'] + '\n\n' + prompt
+                  + '\n\nОдин вариант через OpenAI API. Запрос оплачивается по тарифу вашего API-проекта. '
+                    'Картинка появится на сайте только после «Сохранить».',
+                  [('✨ Сгенерировать', ('generation-start',)),
+                   ('✎ Изменить описание', ('generation-ask', *ids)),
+                   ('← Картинка позиции', ('image', *ids))])
+
+    def generation_start(self, uid):
+        if not available():
+            raise ValueError(SETUP_MESSAGE)
+        # One active HTTP call for the bot; no duplicate submissions or unbounded queue.
+        self.poll_generations()
+        if self.generations:
+            request = self.sessions[uid].get('generation_request', {})
+            return self.send(uid, 'Сейчас уже создаётся картинка. Дождитесь окончания и нажмите «Повторить запуск».',
+                             [('Повторить запуск', ('generation-start',)),
+                              ('← Картинка позиции', ('image', *request['ids']))])
+        state = self.sessions[uid]
+        request = copy.deepcopy(state['generation_request'])
+        _, _, item = self.find(uid, *request['ids'])
+        self.send(uid, 'Создаю картинку для «' + item['name'] + '». Обычно это занимает до нескольких минут. '
+                  'Меню бота остаётся доступным. Отмена уберёт результат; уже отправленный запрос API может быть оплачен.',
+                  [('Отмена', ('image', *request['ids']))])
+        future = self.generation_pool.submit(generate_image, item['name'], request['prompt'])
+        self.generations[uid] = {'future': future, 'state': state, 'request': request, 'cancelled': False}
+
+    def poll_generations(self):
+        for uid, job in list(self.generations.items()):
+            if not job['future'].done():
+                continue
+            del self.generations[uid]
+            if job['cancelled'] or self.sessions.get(uid) is not job['state']:
+                continue
+            request = job['request']
+            try:
+                image, content = job['future'].result()
+                menu = copy.deepcopy(job['state']['menu'])
+                _, _, item = self.find(uid, *request['ids'], menu=menu)
+                item['image'] = image
+                self.preview(uid, menu, 'Сгенерированная картинка позиции: ' + item['name'],
+                             assets={image: content}, generated=request)
+            except ValueError as error:
+                self.send(uid, str(error), [('Повторить запуск', ('generation-start',)),
+                                           ('Изменить описание', ('generation-ask', *request['ids'])),
+                                           ('← Картинка позиции', ('image', *request['ids']))])
+                continue
+            except Exception:
+                LOG.warning('Image generation did not finish; details omitted')
+                self.send(uid, 'Не удалось подготовить картинку. Попробуйте ещё раз.',
+                          [('Повторить запуск', ('generation-start',)),
+                           ('← Картинка позиции', ('image', *request['ids']))])
+                continue
+            try:
+                self.send_generated_preview(uid, refresh=False)
+            except RuntimeError:
+                # Keep the draft even if Telegram temporarily cannot show its photo.
+                LOG.warning('Generated image preview delivery failed; draft retained')
+
+    def send_generated_preview(self, uid, refresh=True):
+        from PIL import Image
+        state = self.sessions[uid]
+        if not state.get('generated') or not state.get('draft_assets'):
+            raise ValueError('Предпросмотр устарел. Откройте картинку позиции заново.')
+        if refresh:
+            self.show_preview(uid)  # Cleans up the previous photo before replacing it.
+        content = next(iter(state['draft_assets'].values()))
+        with Image.open(io.BytesIO(content)) as source:
+            rgba = source.convert('RGBA')
+            photo = Image.new('RGB', rgba.size, 'white')
+            photo.paste(rgba, mask=rgba.getchannel('A'))
+            stream = io.BytesIO()
+            photo.save(stream, 'JPEG', quality=90)
+        boundary = secrets.token_hex(16)
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{uid}\r\n'
+                f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="preview.jpg"\r\n'
+                'Content-Type: image/jpeg\r\n\r\n').encode()
+        body += stream.getvalue() + f'\r\n--{boundary}--\r\n'.encode()
+        result = self.telegram_request('sendPhoto', body, f'multipart/form-data; boundary={boundary}')
+        self.messages[f'preview:{uid}'] = result['message_id']
+        self.message_file.parent.mkdir(exist_ok=True)
+        self.message_file.write_text(json.dumps(self.messages))
+
     def bulk_start(self, uid, mode, scope=None):
+        self.cancel_generation(uid)
         state = self.sessions[uid]
         state['bulk'] = (mode, scope)
         state['input'] = ('bulk', ())
@@ -380,6 +508,7 @@ class Bot:
                      + ('\n\nОстальные правки — в «Все изменения».' if len(changes) > 3 else ''), changes)
 
     def ask(self, uid, kind, *ids):
+        self.cancel_generation(uid)
         prompts = {
             'image': 'Отправьте фото или файл JPG, PNG, WebP до 5 МБ и 16 мегапикселей. Для сохранения прозрачности отправляйте PNG/WebP как файл. Затем подтвердите замену кнопкой «Сохранить».',
             'section-add': 'Введите название нового раздела.',
@@ -404,6 +533,8 @@ class Bot:
         kind, ids = state['input']
         if kind == 'bulk':
             return self.bulk_input(uid, raw)
+        if kind == 'generation':
+            return self.generation_review(uid, ids, raw)
         menu = copy.deepcopy(state['menu'])
         raw = raw.strip()
         if not raw or len(raw) > 3500:
@@ -430,7 +561,8 @@ class Bot:
         names = {'section-add':'Добавление раздела', 'section-name':'Название раздела', 'group-add':'Добавление группы',
                  'item-name':'Название позиции', 'notes':'Описание позиции', 'prices':'Цены позиции', 'columns':'Объёмы группы', 'item-add':'Добавление позиции'}
         target = (i or g or s or {}).get('name', '')
-        self.preview(uid, menu, f'{names[kind]}{": " + target if target else ""}\n{raw}')
+        created = (*ids, g['items'][-1]['id']) if kind == 'item-add' else None
+        self.preview(uid, menu, f'{names[kind]}{": " + target if target else ""}\n{raw}', created_item=created)
 
     def history(self, uid, page):
         entries = git('log', '--format=%H|%cs|%s', '-n', '9', f'--skip={page*8}', '--', 'data/menu.json').splitlines()
@@ -452,6 +584,15 @@ class Bot:
         if op == 'group': return self.group(uid, *args)
         if op == 'item': return self.item(uid, *args)
         if op == 'image': return self.image(uid, *args)
+        if op == 'generation-ask': return self.generation_ask(uid, *args)
+        if op == 'generation-current':
+            _, _, item = self.find(uid, *args)
+            return self.generation_review(uid, args, '\n'.join(item['notes']) or item['name'])
+        if op == 'generation-start': return self.generation_start(uid)
+        if op == 'generation-preview': return self.send_generated_preview(uid)
+        if op == 'generation-again':
+            request = self.sessions[uid]['generated']
+            return self.generation_review(uid, request['ids'], request['prompt'])
         if op == 'input': return self.ask(uid, *args)
         if op == 'bulk-mode':
             return self.send(uid, 'Выберите режим массовой загрузки. Все изменения сохраняются одним подтверждением.',
@@ -492,6 +633,9 @@ class Bot:
             changed = publish(menu, state['base'], update_id, ' — '.join(description.splitlines()[:2])[:180], state.get('draft_assets'))
             state.pop('draft', None)
             state.pop('draft_assets', None)
+            state['menu'], state['base'] = menu, fingerprint(menu)
+            state.pop('generated', None)
+            state.pop('generation_request', None)
             if changed:
                 try:
                     dispatch()
@@ -499,7 +643,11 @@ class Bot:
                 except Exception:
                     message = 'Меню сохранено в GitHub, но запуск публикации не удался. Нажмите «Опубликовать повторно» в главном меню.'
             else: message = 'Изменений нет.'
-            self.send(uid, message, [('← Меню', ('home',))])
+            buttons = [('← Меню', ('home',))]
+            created = state.pop('created_item', None)
+            if created:
+                buttons.insert(0, ('🖼 Картинка новой позиции', ('image', *created)))
+            self.send(uid, message, buttons)
             return
         if op == 'version':
             sha = args[0]
@@ -595,16 +743,23 @@ class Bot:
         end = time.monotonic() + int(os.environ.get('BOT_RUN_SECONDS', '14700'))
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda *_: setattr(self, 'running', False))
-        while self.running and time.monotonic() < end:
-            try:
-                updates = self.api('getUpdates', {'offset': offset, 'timeout': 25, 'allowed_updates': ['message', 'callback_query']})
-                for update in updates:
-                    self.handle(update)
-                    offset = update['update_id'] + 1
-                    cursor.write_text(str(offset))
-            except Exception as error:
-                LOG.warning('Poll failed: %s; retrying', type(error).__name__)
-                time.sleep(5)
+        try:
+            while self.running and time.monotonic() < end:
+                try:
+                    self.poll_generations()
+                    updates = self.api('getUpdates', {'offset': offset, 'timeout': 2 if self.generations else 25,
+                                                      'allowed_updates': ['message', 'callback_query']})
+                    for update in updates:
+                        self.handle(update)
+                        offset = update['update_id'] + 1
+                        cursor.write_text(str(offset))
+                except Exception as error:
+                    LOG.warning('Poll failed: %s; retrying', type(error).__name__)
+                    time.sleep(5)
+        finally:
+            for uid in list(self.generations):
+                self.cancel_generation(uid)
+            self.generation_pool.shutdown(wait=True, cancel_futures=True)
 
 
 if __name__ == '__main__':
