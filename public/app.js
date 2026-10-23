@@ -60,8 +60,8 @@ if (carousel) {
   let hovered = false;
   let focused = false;
   let visible = true;
-  const autoplayInterval = 800;
-  const transitionDuration = 200;
+  const autoplayInterval = 900;
+  const transitionDuration = 500;
   let autoplayElapsed = 0;
   let lastTime = null;
 
