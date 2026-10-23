@@ -17,6 +17,7 @@ from bot.bulk import MAX_BYTES, apply_csv, export_csv
 from bot.menu import MENU_PATH, encode, load, prices, validate
 from bot.images import MAX_IMAGE_BYTES, prepare_image, valid_image_path
 from bot.generation import SETUP_MESSAGE, available, description_text, generate_image
+from bot import site as cafe
 
 LOG = logging.getLogger('menu-bot')
 
@@ -25,6 +26,7 @@ REPLY_ACTIONS = {
     '📥 Массовая загрузка': 'bulk-mode',
     '🕘 История меню': 'history',
     '✖ Отмена': 'home',
+    'ℹ О кофейне': 'site',
 }
 
 
@@ -41,6 +43,35 @@ def git(*args):
 
 def fingerprint(menu):
     return hashlib.sha256(encode(menu).encode()).hexdigest()
+
+
+def site_fingerprint(profile):
+    return hashlib.sha256(cafe.encode(profile).encode()).hexdigest()
+
+
+def publish_site(profile, baseline, update_id, description):
+    """Publish only the cafe profile; concurrent menu edits remain intact."""
+    cafe.validate(profile)
+    git('fetch', 'origin', 'main')
+    remote = cafe.validate(json.loads(git('show', 'FETCH_HEAD:data/site.json')))
+    if site_fingerprint(remote) != baseline:
+        raise ValueError('Сведения о кофейне уже изменились. Откройте /start и повторите правку.')
+    git('merge', '--ff-only', 'FETCH_HEAD')
+    if site_fingerprint(profile) == site_fingerprint(remote):
+        return False
+    try:
+        cafe.SITE_PATH.write_text(cafe.encode(profile))
+        git('add', '--', str(cafe.SITE_PATH))
+        git('commit', '-m', description, '-m', f'Telegram-update: {update_id}')
+    except Exception:
+        git('restore', '--staged', '--worktree', str(cafe.SITE_PATH))
+        raise
+    try:
+        git('push', 'origin', 'HEAD:main')
+    except Exception:
+        git('reset', '--hard', 'HEAD^')
+        raise ValueError('Не удалось сохранить сведения в GitHub. Обновите данные через /start и повторите.') from None
+    return True
 
 
 def dispatch():
@@ -157,6 +188,7 @@ class Bot:
                 'keyboard': [
                     [{'text': '🏠 Главное меню'}, {'text': '📥 Массовая загрузка'}],
                     [{'text': '🕘 История меню'}, {'text': '✖ Отмена'}],
+                    [{'text': 'ℹ О кофейне'}],
                 ],
                 'resize_keyboard': True,
                 'is_persistent': True,
@@ -280,7 +312,7 @@ class Bot:
         buttons = [(('🙈 ' if s['hidden'] else '') + s['name'], ('section', s['id'])) for s in sections[page*15:(page+1)*15]]
         if page: buttons.append(('← Предыдущие разделы', ('home', page-1)))
         if (page+1)*15 < len(sections): buttons.append(('Следующие разделы →', ('home', page+1)))
-        buttons += [('📥 Массовая загрузка', ('bulk-mode',)),
+        buttons += [('ℹ Сведения о кофейне', ('site',)), ('📥 Массовая загрузка', ('bulk-mode',)),
                     ('＋ Раздел', ('input', 'section-add')), ('🕘 История меню', ('history', 0)),
                     ('↻ Опубликовать повторно', ('deploy',))]
         self.send(uid, 'Управление меню\nВыберите раздел. 🙈 — скрыт с сайта.\n/start — обновить меню, /cancel — отменить ввод.', buttons)
@@ -293,6 +325,131 @@ class Bot:
                     ('＋ Группа позиций', ('input', 'group-add', sid)),
                     ('Удалить раздел', ('delete-section', sid)), ('← Все разделы', ('home',))]
         self.send(uid, s['name'] + ('\nСкрыт с сайта; все позиции сохранены.' if s['hidden'] else '\nВыберите группу позиций.'), buttons)
+
+    def site(self, uid, group=None):
+        self.cancel_generation(uid)
+        state = self.sessions[uid]
+        for key in ('input', 'draft', 'draft_assets', 'site_draft'):
+            state.pop(key, None)
+        if 'site' not in state:
+            state['site'] = cafe.load()
+            state['site_base'] = site_fingerprint(state['site'])
+        profile = state['site']
+        if group:
+            if group not in cafe.GROUPS:
+                raise ValueError('Неизвестный раздел сведений.')
+            buttons = [(label + (' · заполнено' if profile[key] else ' · пусто'), ('site-ask', key))
+                       for key, (label, section, _) in cafe.FIELDS.items() if section == group]
+            buttons.append(('← О кофейне', ('site',)))
+            return self.send(uid, cafe.GROUPS[group] + '\nВыберите поле для редактирования. Публикация — после подтверждения.', buttons)
+        missing = cafe.missing(profile)
+        status = '\n\nЕщё не заполнено:\n' + '\n'.join('• ' + label for label in missing) if missing else '\n\nВсе поля заполнены.'
+        self.send(uid, 'Сведения о кофейне\nКонтакты, реквизиты, соцсети и слова владельца для окон на сайте.' + status,
+                  [(name, ('site', key)) for key, name in cafe.GROUPS.items()]
+                  + [('Соцсети', ('site-socials',)), ('🕘 История сведений', ('site-history', 0)), ('← Главное меню', ('home',))])
+
+    def site_ask(self, uid, key):
+        if key not in cafe.FIELDS:
+            raise ValueError('Неизвестное поле.')
+        label, group, limit = cafe.FIELDS[key]
+        self.sessions[uid]['input'] = ('site-field', (key,))
+        current = self.sessions[uid]['site'][key]
+        self.send(uid, label + '\nСейчас: ' + (current or 'не заполнено') + f'\n\nВведите новое значение, до {limit} символов. «-» — очистить. '
+                  'Текст будет опубликован на сайте и сохранён в истории.', [('Отмена', ('site', group))])
+
+    def site_preview(self, uid, profile, description, back):
+        cafe.validate(profile)
+        state = self.sessions[uid]
+        state.pop('input', None)
+        state['site_draft'] = (profile, description)
+        self.send(uid, description + '\n\nСохранить и опубликовать? Предыдущая версия останется в истории сведений.',
+                  [('✓ Сохранить', ('site-save',)), ('Отмена', back)])
+
+    def site_input(self, uid, raw):
+        kind, ids = self.sessions[uid]['input']
+        if not isinstance(raw, str) or not raw.strip() or len(raw) > 3500:
+            raise ValueError('Введите текст от 1 до 3500 символов.')
+        profile = copy.deepcopy(self.sessions[uid]['site'])
+        raw = raw.strip()
+        if kind == 'site-field':
+            key = ids[0]
+            profile[key] = '' if raw == '-' else raw
+            label, group, _ = cafe.FIELDS[key]
+            return self.site_preview(uid, profile, label + '\n' + (profile[key] or 'Поле будет очищено.'), ('site', group))
+        lines = raw.splitlines()
+        if len(lines) != 2:
+            raise ValueError('Нужны две строки: название соцсети и полная HTTPS-ссылка.')
+        ident = ids[0] if ids else secrets.token_hex(6)
+        social = {'id': ident, 'name': lines[0].strip(), 'url': lines[1].strip()}
+        if ids:
+            index = next(n for n, value in enumerate(profile['socials']) if value['id'] == ident)
+            profile['socials'][index] = social
+        else:
+            profile['socials'].append(social)
+        self.site_preview(uid, profile, 'Соцсеть: ' + social['name'] + '\n' + social['url'], ('site-socials',))
+
+    def site_socials(self, uid):
+        self.sessions[uid].pop('input', None)
+        self.sessions[uid].pop('site_draft', None)
+        links = self.sessions[uid]['site']['socials']
+        self.send(uid, 'Соцсети\nЭти ссылки появляются в окне по нажатию подписи внизу сайта.',
+                  [(s['name'], ('site-social', s['id'])) for s in links]
+                  + [('＋ Соцсеть', ('site-social-ask',)), ('← О кофейне', ('site',))])
+
+    def site_action(self, uid, op, args, update_id):
+        state = self.sessions[uid]
+        if op == 'site': return self.site(uid, *args)
+        if 'site' not in state:
+            return self.site(uid)
+        if op == 'site-ask': return self.site_ask(uid, *args)
+        if op == 'site-socials': return self.site_socials(uid)
+        if op == 'site-social':
+            social = next(s for s in state['site']['socials'] if s['id'] == args[0])
+            return self.send(uid, social['name'] + '\n' + social['url'],
+                             [('✎ Название и ссылка', ('site-social-ask', *args)), ('Удалить ссылку', ('site-social-delete', *args)),
+                              ('← Соцсети', ('site-socials',))])
+        if op == 'site-social-ask':
+            state['input'] = ('site-social', tuple(args))
+            return self.send(uid, 'Отправьте название соцсети и ссылку двумя строками.\nНапример:\nTelegram\nhttps://t.me/your_cafe',
+                             [('Отмена', ('site-socials',))])
+        if op == 'site-social-delete':
+            profile = copy.deepcopy(state['site'])
+            social = next(s for s in profile['socials'] if s['id'] == args[0])
+            profile['socials'].remove(social)
+            return self.site_preview(uid, profile, 'Удаление ссылки: ' + social['name'], ('site-socials',))
+        if op == 'site-history':
+            page = args[0]
+            rows = git('log', '--format=%H|%cs|%s', '-n', '9', f'--skip={page*8}', '--', 'data/site.json').splitlines()
+            buttons = []
+            for row in rows[:8]:
+                sha, date, subject = row.split('|', 2)
+                buttons.append((date + ' ' + subject, ('site-version', sha)))
+            if page: buttons.append(('← Новее', ('site-history', page-1)))
+            if len(rows) > 8: buttons.append(('Старее →', ('site-history', page+1)))
+            buttons.append(('← О кофейне', ('site',)))
+            return self.send(uid, 'История сведений о кофейне. Восстановление не меняет меню и цены.', buttons)
+        if op in ('site-version', 'site-restore'):
+            profile = cafe.validate(json.loads(git('show', f'{args[0]}:data/site.json')))
+            if op == 'site-restore':
+                return self.site_preview(uid, profile, 'Восстановление сведений из версии ' + args[0][:8], ('site-history', 0))
+            summary = '\n\n'.join(label + ': ' + profile[key] for key, (label, _, _) in cafe.FIELDS.items() if profile[key])
+            summary += '\n\nСоцсети:\n' + '\n'.join(s['name'] + ': ' + s['url'] for s in profile['socials'])
+            return self.send(uid, 'Версия ' + args[0][:8] + '\n\n' + summary[:3600],
+                             [('Восстановить', ('site-restore', args[0])), ('← История', ('site-history', 0))])
+        if op == 'site-save':
+            profile, description = state['site_draft']
+            changed = publish_site(profile, state['site_base'], update_id, 'Сведения о кофейне — ' + description.splitlines()[0][:120])
+            state['site'], state['site_base'] = profile, site_fingerprint(profile)
+            state.pop('site_draft', None)
+            message = 'Изменений нет.'
+            if changed:
+                try:
+                    dispatch()
+                    message = 'Сведения сохранены в истории. Публикация сайта запущена.'
+                except Exception:
+                    message = 'Сведения сохранены. Не удалось запустить публикацию; нажмите «Опубликовать повторно» в главном меню.'
+            return self.send(uid, message, [('← О кофейне', ('site',))])
+        raise ValueError('Неизвестное действие со сведениями о кофейне.')
 
     def group(self, uid, sid, gid, page=0):
         _, g, _ = self.find(uid, sid, gid)
@@ -533,6 +690,8 @@ class Bot:
         kind, ids = state['input']
         if kind == 'bulk':
             return self.bulk_input(uid, raw)
+        if kind in ('site-field', 'site-social'):
+            return self.site_input(uid, raw)
         if kind == 'generation':
             return self.generation_review(uid, ids, raw)
         menu = copy.deepcopy(state['menu'])
@@ -580,6 +739,8 @@ class Bot:
         if op == 'home': return self.home(uid, *args)
         if uid not in self.sessions:
             return self.send(uid, 'Бот перезапущен. Откройте /start.')
+        if op == 'site' or op.startswith('site-'):
+            return self.site_action(uid, op, args, update_id)
         if op == 'section': return self.section(uid, *args)
         if op == 'group': return self.group(uid, *args)
         if op == 'item': return self.item(uid, *args)
@@ -729,6 +890,9 @@ class Bot:
                 hint = '\nМожно отправить другую картинку или отменить загрузку.'
                 ids = self.sessions[uid]['input'][1]
                 buttons.insert(0, ('← Картинка позиции', ('image', *ids)))
+            if self.sessions.get(uid, {}).get('input', (None,))[0] in ('site-field', 'site-social'):
+                hint = '\nИсправьте значение и отправьте снова.'
+                buttons.insert(0, ('← О кофейне', ('site',)))
             self.send(uid, str(error) + hint, buttons)
         except Exception:
             LOG.error('Operation failed (%s); credentials and message contents omitted', type(update).__name__)

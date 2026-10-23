@@ -1,6 +1,7 @@
 // Keep one category open, including in browsers without details[name] support.
 const categories = [...document.querySelectorAll('.menu-category')];
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+let pageDialogOpen = false;
 for (const category of categories) {
   category.addEventListener('toggle', () => {
     if (!category.open) return;
@@ -52,6 +53,7 @@ if (carousel) {
   let step = 0;
   let offset = 0;
   let cycle = 0;
+  let imageAnchor = 0;
   let motion = null;
   let drag = null;
   let paused = reduceMotion.matches || count < 2;
@@ -67,7 +69,7 @@ if (carousel) {
     status.textContent = `${originals[index].querySelector('.product-name').textContent}, ${originals[index].querySelector('.product-meta').textContent}`;
   };
   const draw = () => {
-    track.style.transform = `translate3d(${viewport.clientWidth / 2 - originals[0].offsetWidth / 2 - offset}px,0,0)`;
+    track.style.transform = `translate3d(${viewport.clientWidth * .46 - imageAnchor - offset}px,0,0)`;
     cards.forEach((card, index) => {
       const distance = Math.abs(index * step - offset) / step;
       card.style.opacity = Math.max(.18, 1 - distance * .32).toFixed(3);
@@ -78,6 +80,8 @@ if (carousel) {
     const progress = step ? offset / step : count > 1 ? count : 0;
     step = originals[0].offsetWidth + parseFloat(getComputedStyle(track).gap);
     cycle = step * count;
+    const image = originals[0].querySelector('.product-image');
+    imageAnchor = image.offsetLeft + image.offsetWidth / 2;
     offset = normalize(progress * step);
     motion = null;
     drag = null;
@@ -155,7 +159,7 @@ if (carousel) {
   const tick = time => {
     const delta = Math.min((time - (lastTime || time)) / 1000, .05);
     lastTime = time;
-    if (!document.hidden && visible) {
+    if (!document.hidden && visible && !pageDialogOpen) {
       let changed = false;
       if (motion) {
         const progress = Math.min(1, (time - motion.time) / motion.duration);
@@ -181,29 +185,48 @@ if (carousel) {
 }
 
 
-// First tap reveals the review link; navigation requires a separate tap.
-const reviewWidget = document.querySelector('.review-widget');
-if (reviewWidget) {
-  const toggle = reviewWidget.querySelector('.review-toggle');
-  const panel = reviewWidget.querySelector('.review-panel');
-  const setReviewOpen = open => {
-    reviewWidget.classList.toggle('is-open', open);
-    toggle.setAttribute('aria-expanded', String(open));
-    toggle.setAttribute('aria-label', open ? 'Свернуть ссылку для отзыва' : 'Открыть ссылку для отзыва');
-    panel.setAttribute('aria-hidden', String(!open));
-    panel.inert = !open;
+// Native dialogs keep focus inside the window and support Escape.
+for (const trigger of document.querySelectorAll('[data-open-dialog]')) {
+  const dialog = document.getElementById(trigger.dataset.openDialog);
+  if (!dialog || typeof dialog.showModal !== 'function') continue;
+  const open = () => {
+    if (dialog.open) return;
+    dialog.showModal();
+    pageDialogOpen = true;
+    document.body.classList.add('dialog-open');
   };
-  toggle.addEventListener('click', () => setReviewOpen(toggle.getAttribute('aria-expanded') !== 'true'));
-  document.addEventListener('pointerdown', event => {
-    if (!reviewWidget.contains(event.target)) setReviewOpen(false);
+  trigger.addEventListener('click', event => {
+    event.preventDefault();
+    open();
   });
-  reviewWidget.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
-      setReviewOpen(false);
-      toggle.focus();
+  dialog.querySelector('[data-close-dialog]').addEventListener('click', event => {
+    event.preventDefault();
+    dialog.close();
+  });
+  dialog.addEventListener('click', event => {
+    if (event.target !== dialog) return;
+    const box = dialog.getBoundingClientRect();
+    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.close();
+  });
+  dialog.addEventListener('keydown', event => {
+    if (event.key !== 'Tab') return;
+    const controls = [...dialog.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+      .filter(element => element.getClientRects().length > 0);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   });
-  reviewWidget.addEventListener('focusout', event => {
-    if (!reviewWidget.contains(event.relatedTarget)) setReviewOpen(false);
+  dialog.addEventListener('close', () => {
+    pageDialogOpen = false;
+    document.body.classList.remove('dialog-open');
+    if (location.hash === `#${dialog.id}`) history.replaceState(null, '', location.pathname + location.search);
+    trigger.focus({ preventScroll: true });
   });
+  if (location.hash === `#${dialog.id}`) open();
 }
