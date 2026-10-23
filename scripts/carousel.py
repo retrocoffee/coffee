@@ -3,6 +3,7 @@ import json
 import re
 from html import escape
 from pathlib import Path
+from bot.images import valid_image_path
 
 
 def render_carousel(menu):
@@ -24,8 +25,8 @@ def render_carousel(menu):
         volume = group['columns'][variant] if group['columns'] else next(
             (note for note in item['notes'] if re.fullmatch(r'\d+(?:[.,]\d+)?\s*(?:мл|л|г|гр\.)', note)), '')
         description = ' '.join(note for note in item['notes'] if note != volume) or entry.get('description', '')
-        image = entry['image']
-        if not re.fullmatch(r'\./assets/products/[a-z0-9-]+\.(?:svg|png|webp|jpe?g|avif)', image) or not Path('public', image[2:]).is_file():
+        image = item.get('image', entry['image'])
+        if not (valid_image_path(image) or re.fullmatch(r'\./assets/products/[a-z0-9-]+\.(?:svg|png|webp|jpe?g|avif)', image)) or not Path('public', image[2:]).is_file():
             raise ValueError('Invalid carousel image: ' + image)
         cards.append(f'''<article class="product-card">
 <img class="product-image" src="{escape(image)}" alt="{escape(item['name'])}" width="460" height="420" decoding="async">

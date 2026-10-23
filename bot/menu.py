@@ -3,6 +3,7 @@ import json
 import re
 from html import escape
 from pathlib import Path
+from bot.images import menu_image, valid_image_path
 
 MENU_PATH = Path('data/menu.json')
 
@@ -38,6 +39,8 @@ def validate(menu):
             ids(group['items'])
             for item in group['items']:
                 text(item['name'], 200)
+                if 'image' in item and not valid_image_path(item['image']):
+                    raise ValueError('Некорректная картинка позиции')
                 for note in item['notes']:
                     text(note)
                 if len(item['notes']) > 6 or len(item['prices']) != max(1, len(group['columns'])):
@@ -89,7 +92,8 @@ def render(menu):
             out.append('<tbody>')
             for item in group['items']:
                 notes = ''.join(f'<span class="item-note">{escape(note)}</span>' for note in item['notes'])
-                out.append(f'<tr><th scope="row">{escape(item["name"])}{notes}</th>' + ''.join(f'<td>{escape(price)}</td>' for price in item['prices']) + '</tr>')
+                image = escape(menu_image(section, group, item), quote=True)
+                out.append(f'<tr><th scope="row"><span class="menu-item"><img class="menu-item-image" src="{image}" alt="" width="38" height="42" loading="lazy" decoding="async"><span class="menu-item-copy">{escape(item["name"])}{notes}</span></span></th>' + ''.join(f'<td>{escape(price)}</td>' for price in item['prices']) + '</tr>')
             out.append('</tbody></table>')
         out.append('</div></details>')
     return '\n'.join(out)

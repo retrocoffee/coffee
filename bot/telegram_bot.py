@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 from bot.bulk import MAX_BYTES, apply_csv, export_csv
 from bot.menu import MENU_PATH, encode, load, prices, validate
+from bot.images import MAX_IMAGE_BYTES, prepare_image, valid_image_path
 
 LOG = logging.getLogger('menu-bot')
 
@@ -50,7 +51,7 @@ def dispatch():
         return response.status
 
 
-def publish(menu, baseline, update_id, description):
+def publish(menu, baseline, update_id, description, assets=None):
     """Optimistic concurrency: never overwrite a menu changed by another editor."""
     validate(menu)
     git('fetch', 'origin', 'main')
@@ -60,12 +61,37 @@ def publish(menu, baseline, update_id, description):
     git('merge', '--ff-only', 'FETCH_HEAD')
     if fingerprint(menu) == fingerprint(remote):
         return False
-    MENU_PATH.write_text(encode(menu))
+    assets = assets or {}
+    references = {i['image'] for s in menu['sections'] for g in s['groups'] for i in g['items'] if 'image' in i}
+    for image, content in assets.items():
+        if (not valid_image_path(image) or image not in references or len(content) > MAX_IMAGE_BYTES
+                or Path(image).stem != hashlib.sha256(content).hexdigest()):
+            raise ValueError('Некорректная картинка. Загрузите её заново.')
+    for image in references:
+        if image not in assets and not Path('public', image[2:]).is_file():
+            raise ValueError('Картинка этой версии недоступна. Загрузите её заново.')
+    paths = [str(MENU_PATH)]
+    new_paths = []
     try:
-        git('add', 'data/menu.json')
+        for image, content in assets.items():
+            path = Path('public', image[2:])
+            if path.exists():
+                if path.read_bytes() != content:
+                    raise ValueError('Картинка повреждена. Загрузите её заново.')
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            new_paths.append(path)
+            path.write_bytes(content)
+            paths.append(str(path))
+        MENU_PATH.write_text(encode(menu))
+        git('add', '--', *paths)
         git('commit', '-m', description, '-m', f'Telegram-update: {update_id}')
     except Exception:
         git('restore', '--staged', '--worktree', 'data/menu.json')
+        if new_paths:
+            git('reset', '--', *(str(p) for p in new_paths))
+            for path in new_paths:
+                path.unlink(missing_ok=True)
         raise
     try:
         git('push', 'origin', 'HEAD:main')
@@ -197,21 +223,40 @@ class Bot:
             raise ValueError('Максимальный размер CSV — 512 КБ.')
         if Path(document.get('file_name', '')).suffix.lower() not in ('.csv', '.tsv', '.txt'):
             raise ValueError('Отправьте CSV-файл из шаблона (UTF-8).')
-        info = self.api('getFile', {'file_id': document['file_id']})
-        path = info['file_path']
-        if '..' in path or not all(c.isalnum() or c in '_./-' for c in path):
-            raise ValueError('Не удалось получить файл Telegram.')
-        try:
-            with urllib.request.urlopen(f'https://api.telegram.org/file/bot{self.token}/{path}', timeout=40) as response:
-                content = response.read(MAX_BYTES + 1)
-        except (urllib.error.URLError, OSError):
-            raise RuntimeError('Telegram file download failed') from None
+        content = self.download_file(document['file_id'], MAX_BYTES)
         if len(content) > MAX_BYTES:
             raise ValueError('Максимальный размер CSV — 512 КБ.')
         try:
             return content.decode('utf-8-sig')
         except UnicodeError:
             raise ValueError('Сохраните файл в кодировке CSV UTF-8 и отправьте заново.') from None
+
+    def download_file(self, file_id, limit):
+        info = self.api('getFile', {'file_id': file_id})
+        path = info['file_path']
+        if not path or path.startswith('/') or '..' in path or not all(c.isalnum() or c in '_./-' for c in path):
+            raise ValueError('Не удалось получить файл Telegram.')
+        try:
+            with urllib.request.urlopen(f'https://api.telegram.org/file/bot{self.token}/{path}', timeout=40) as response:
+                return response.read(limit + 1)
+        except (urllib.error.URLError, OSError):
+            raise RuntimeError('Telegram file download failed') from None
+
+    def image_input(self, uid, msg):
+        state = self.sessions[uid]
+        _, ids = state['input']
+        photos = msg.get('photo', [])
+        upload = photos[-1] if photos else msg.get('document')
+        if not upload:
+            raise ValueError('Отправьте фото или файл JPG, PNG, WebP. Для прозрачного фона отправляйте PNG/WebP как файл.')
+        if upload.get('file_size', 0) > MAX_IMAGE_BYTES:
+            raise ValueError('Отправьте картинку до 5 МБ.')
+        image, content = prepare_image(self.download_file(upload['file_id'], MAX_IMAGE_BYTES))
+        menu = copy.deepcopy(state['menu'])
+        _, _, item = self.find(uid, *ids, menu=menu)
+        item['image'] = image
+        self.preview(uid, menu, 'Картинка позиции: ' + item['name'] + '\nНовая картинка появится слева от названия и в карусели, если позиция в ней есть.',
+                     assets={image: content})
 
     def refresh(self, uid):
         git('fetch', 'origin', 'main')
@@ -260,6 +305,7 @@ class Bot:
             ('₽ Изменить цены', ('input', 'prices', sid, gid, iid)),
             ('✎ Переименовать', ('input', 'item-name', sid, gid, iid)),
             ('✎ Описание', ('input', 'notes', sid, gid, iid)),
+            ('🖼 Картинка', ('image', sid, gid, iid)),
             ('Удалить позицию', ('delete-item', sid, gid, iid)),
             ('← Позиции', ('group', sid, gid))])
 
@@ -270,9 +316,22 @@ class Bot:
         i = next(i for i in g['items'] if i['id'] == iid) if iid else None
         return s,g,i
 
-    def preview(self, uid, menu, description, changes=None):
+    def image(self, uid, sid, gid, iid):
+        state = self.sessions[uid]
+        for key in ('input', 'draft', 'draft_assets'):
+            state.pop(key, None)
+        _, _, item = self.find(uid, sid, gid, iid)
+        buttons = [('🖼 Заменить картинку' if item.get('image') else '＋ Добавить картинку', ('input', 'image', sid, gid, iid))]
+        if item.get('image'):
+            buttons.append(('↺ Стандартная иконка', ('image-reset', sid, gid, iid)))
+        buttons.append(('← Позиция', ('item', sid, gid, iid)))
+        self.send(uid, item['name'] + '\n\n' + ('Загружена своя картинка.' if item.get('image') else 'Сейчас показана стандартная иконка.')
+                  + '\nМожно загрузить фото или файл JPG, PNG, WebP до 5 МБ.', buttons)
+
+    def preview(self, uid, menu, description, changes=None, assets=None):
         validate(menu)
         self.sessions[uid]['draft'] = (menu, description)
+        self.sessions[uid]['draft_assets'] = assets or {}
         self.sessions[uid].pop('input', None)
         self.sessions[uid]['bulk_changes'] = changes or []
         self.show_preview(uid)
@@ -292,6 +351,7 @@ class Bot:
         state['bulk'] = (mode, scope)
         state['input'] = ('bulk', ())
         state.pop('draft', None)
+        state.pop('draft_assets', None)
         target = 'Всё меню' if scope is None else self.find(uid, *scope)[1]['caption']
         self.send(uid, f'Массовая загрузка: {target}\n'
                   + ('Режим: только цены.\n' if mode == 'prices' else 'Режим: позиции и цены.\n')
@@ -321,6 +381,7 @@ class Bot:
 
     def ask(self, uid, kind, *ids):
         prompts = {
+            'image': 'Отправьте фото или файл JPG, PNG, WebP до 5 МБ и 16 мегапикселей. Для сохранения прозрачности отправляйте PNG/WebP как файл. Затем подтвердите замену кнопкой «Сохранить».',
             'section-add': 'Введите название нового раздела.',
             'section-name': 'Введите новое название раздела.',
             'group-add': 'Введите название группы (например, «Добавки»).',
@@ -334,6 +395,8 @@ class Bot:
             _, g, _ = self.find(uid, *ids)
             prompt += '\nНужно цен: ' + str(max(1, len(g['columns']))) + '. Объёмы: ' + ('; '.join(g['columns']) or 'не указаны')
         self.sessions[uid]['input'] = (kind, ids)
+        self.sessions[uid].pop('draft', None)
+        self.sessions[uid].pop('draft_assets', None)
         self.send(uid, prompt, [('Отмена', ('home',))])
 
     def input(self, uid, raw):
@@ -388,6 +451,7 @@ class Bot:
         if op == 'section': return self.section(uid, *args)
         if op == 'group': return self.group(uid, *args)
         if op == 'item': return self.item(uid, *args)
+        if op == 'image': return self.image(uid, *args)
         if op == 'input': return self.ask(uid, *args)
         if op == 'bulk-mode':
             return self.send(uid, 'Выберите режим массовой загрузки. Все изменения сохраняются одним подтверждением.',
@@ -423,8 +487,11 @@ class Bot:
             dispatch()
             return self.send(uid, 'Публикация сайта запущена.', [('← Меню', ('home',))])
         if op == 'save':
-            menu, description = self.sessions[uid].pop('draft')
-            changed = publish(menu, self.sessions[uid]['base'], update_id, ' — '.join(description.splitlines()[:2])[:180])
+            state = self.sessions[uid]
+            menu, description = state['draft']
+            changed = publish(menu, state['base'], update_id, ' — '.join(description.splitlines()[:2])[:180], state.get('draft_assets'))
+            state.pop('draft', None)
+            state.pop('draft_assets', None)
             if changed:
                 try:
                     dispatch()
@@ -454,6 +521,9 @@ class Bot:
         elif op == 'delete-item':
             g['items'].remove(i)
             description = 'Удаление позиции: ' + i['name']
+        elif op == 'image-reset':
+            i.pop('image', None)
+            description = 'Стандартная иконка позиции: ' + i['name']
         else: raise ValueError('Неизвестная команда. Откройте /start.')
         self.preview(uid, menu, description)
 
@@ -493,9 +563,11 @@ class Bot:
                 elif text.split('@')[0] in ('/start', '/cancel'):
                     self.home(uid)
                 elif uid in self.sessions and 'input' in self.sessions[uid]:
+                    if self.sessions[uid]['input'][0] == 'image':
+                        return self.image_input(uid, msg)
                     if 'document' in msg:
                         if self.sessions[uid]['input'][0] != 'bulk':
-                            raise ValueError('Файлы принимаются в разделе «Массовая загрузка».')
+                            raise ValueError('Для картинки откройте позицию → «Картинка». Для CSV — «Массовая загрузка».')
                         text = self.read_document(msg['document'])
                     self.input(uid, text)
                 else:
@@ -504,7 +576,12 @@ class Bot:
             buttons = [('← Главное меню', ('home',))]
             if self.sessions.get(uid, {}).get('input', (None,))[0] == 'bulk':
                 buttons.insert(0, ('📄 Скачать шаблон', ('bulk-template',)))
-            self.send(uid, str(error) + ('\nИсправьте файл и отправьте его снова.' if len(buttons) > 1 else ''), buttons)
+            hint = '\nИсправьте файл и отправьте его снова.' if len(buttons) > 1 else ''
+            if self.sessions.get(uid, {}).get('input', (None,))[0] == 'image':
+                hint = '\nМожно отправить другую картинку или отменить загрузку.'
+                ids = self.sessions[uid]['input'][1]
+                buttons.insert(0, ('← Картинка позиции', ('image', *ids)))
+            self.send(uid, str(error) + hint, buttons)
         except Exception:
             LOG.error('Operation failed (%s); credentials and message contents omitted', type(update).__name__)
             self.send(uid, 'Операция не завершена. Откройте /start и проверьте актуальное меню.', [('← Меню', ('home',))])
