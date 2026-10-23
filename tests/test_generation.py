@@ -32,6 +32,7 @@ class GenerationAPITests(unittest.TestCase):
         response = Mock()
         response.__enter__ = Mock(return_value=response)
         response.__exit__ = Mock(return_value=False)
+        response.status = 200
         response.read.return_value = content
         return response
 
@@ -46,11 +47,8 @@ class GenerationAPITests(unittest.TestCase):
         self.assertEqual(request.get_header('Authorization'), 'Bearer test-only-key')
         payload = json.loads(request.data)
         self.assertEqual(payload['steps'], 4)
-        self.assertIsInstance(payload['seed'], int)
-        self.assertGreaterEqual(payload['seed'], 0)
-        self.assertLess(payload['seed'], 2**32)
         self.assertIn('pure white', payload['prompt'])
-        self.assertEqual(set(payload), {'prompt', 'steps', 'seed'})
+        self.assertEqual(set(payload), {'prompt', 'steps'})
         self.assertIn('Латте', payload['prompt'])
         self.assertIn('В стеклянной кружке', payload['prompt'])
         response.read.assert_called_once_with(MAX_RESPONSE_BYTES + 1)
@@ -83,15 +81,65 @@ class GenerationAPITests(unittest.TestCase):
                     self.assertNotIn('private-account-details', str(caught.exception))
                     self.assertEqual(call.call_count, 1)
 
-    def test_direct_model_response_and_new_seed_for_each_variant(self):
+    def test_direct_model_response_and_long_description_use_supported_parameters(self):
         raw = json.dumps({'image': base64.b64encode(image_bytes()).decode()}).encode()
-        with patch('bot.generation.secrets.randbelow', side_effect=[10, 20]), patch('bot.generation.urllib.request.urlopen', return_value=self.response(raw)) as call:
+        with patch('bot.generation.urllib.request.urlopen', return_value=self.response(raw)) as call:
             for _ in range(2):
                 generate_image('К' * 200, 'я' * 1500)
         payloads = [json.loads(args.args[0].data) for args in call.call_args_list]
-        self.assertEqual([p['seed'] for p in payloads], [10, 20])
+        self.assertTrue(all(set(p) == {'prompt', 'steps'} for p in payloads))
         self.assertTrue(all(len(p['prompt']) <= 2048 for p in payloads))
         self.assertTrue(all('я' * 1500 in p['prompt'] for p in payloads))
+
+    def test_refusals_show_actionable_reason_and_numeric_diagnostics_without_retry(self):
+        cases = [(400, 9999, 'параметры запроса'), (400, 5007, 'не нашёл модель'),
+                 (403, 5035, 'Workers Paid'), (403, 3023, 'ограничил доступ аккаунта'),
+                 (403, 5016, 'принять условия'), (403, 5018, 'модель недоступна'),
+                 (403, 9999, 'разрешения токена'), (404, 3042, 'не нашёл модель'),
+                 (408, 3007, 'не успел'), (429, 3040, 'высокой нагрузке'),
+                 (503, 9999, 'Временная ошибка'), (418, 9999, 'причины отказа')]
+        for status, code, reason in cases:
+            body = json.dumps({'success': False, 'errors': [{'code': code, 'message': 'private-details'}]}).encode()
+            error = urllib.error.HTTPError('https://api.cloudflare.com', status, 'error', {}, io.BytesIO(body))
+            with self.subTest(status=status, code=code), patch('bot.generation.urllib.request.urlopen', side_effect=error) as call:
+                with self.assertRaises(ValueError) as caught:
+                    generate_image('Латте', 'Описание')
+                self.assertIn(reason, str(caught.exception))
+                self.assertIn(f'HTTP {status}; Cloudflare {code}', str(caught.exception))
+                self.assertNotIn('private-details', str(caught.exception))
+                self.assertEqual(call.call_count, 1)
+
+    def test_unknown_error_in_successful_http_response_keeps_status_and_code(self):
+        raw = b'{"success":false,"errors":[{"code":3999,"message":"private-details"}]}'
+        with patch('bot.generation.urllib.request.urlopen', return_value=self.response(raw)) as call:
+            with self.assertRaisesRegex(ValueError, 'HTTP 200; Cloudflare 3999'):
+                generate_image('Латте', 'Описание')
+            self.assertEqual(call.call_count, 1)
+
+    def test_only_numeric_diagnostics_are_exposed_in_chat_and_logs(self):
+        unsafe_codes = ['test-only-key', '123\nprivate-details', {'token': 'test-only-key'},
+                        ['private-details'], True, None, 999999999, 1.5, '１２３']
+        raw = json.dumps({'success': False, 'errors': [
+            {'code': code, 'message': 'private-details'} for code in unsafe_codes + ['3999']]}).encode()
+        error = urllib.error.HTTPError('https://api.cloudflare.com', 400, 'test-only-key',
+                                       {'X-Private-Header': 'private-details'}, io.BytesIO(raw))
+        with patch('bot.generation.urllib.request.urlopen', side_effect=error), self.assertLogs('menu-bot.generation') as logs:
+            with self.assertRaises(ValueError) as caught:
+                generate_image('Латте', 'Описание')
+        for output in [str(caught.exception), *logs.output]:
+            self.assertIn('HTTP 400; Cloudflare 3999', output)
+            for secret in ('test-only-key', 'private-details', '999999999', '１２３'):
+                self.assertNotIn(secret, output)
+
+    def test_non_json_error_body_still_reports_http_status(self):
+        error = urllib.error.HTTPError('https://api.cloudflare.com', 502, 'error', {},
+                                       io.BytesIO(b'<html>private-details</html>'))
+        with patch('bot.generation.urllib.request.urlopen', side_effect=error) as call:
+            with self.assertRaises(ValueError) as caught:
+                generate_image('Латте', 'Описание')
+        self.assertIn('HTTP 502', str(caught.exception))
+        self.assertNotIn('private-details', str(caught.exception))
+        self.assertEqual(call.call_count, 1)
 
     def test_errors_do_not_leak_provider_body_or_retry(self):
         for status in [400, 401, 403, 429, 500]:
