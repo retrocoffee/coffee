@@ -61,7 +61,7 @@ if (carousel) {
   let focused = false;
   let visible = true;
   const autoplayInterval = 1000;
-  const transitionDuration = 700;
+  const transitionDuration = 100;
   let autoplayElapsed = 0;
   let lastTime = null;
 
