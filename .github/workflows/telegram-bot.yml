@@ -48,6 +48,9 @@ jobs:
           path: .bot-state
           key: telegram-offset-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: telegram-offset-
+      - name: Run automated tests
+        if: steps.config.outputs.ready == 'true'
+        run: python -m unittest discover -s tests
       - name: Run menu bot
         if: steps.config.outputs.ready == 'true'
         env:
@@ -60,7 +63,6 @@ jobs:
         run: |
           git config user.name 'RetroCoffe menu bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          python -m unittest discover -s tests
           python -m bot.telegram_bot
       - uses: actions/cache/save@v4
         if: always() && steps.config.outputs.ready == 'true'

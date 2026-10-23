@@ -2,6 +2,7 @@ import base64
 import copy
 import io
 import json
+import logging
 import os
 import tempfile
 import unittest
@@ -24,6 +25,11 @@ def image_bytes():
 
 class GenerationAPITests(unittest.TestCase):
     def setUp(self):
+        # Expected provider failures belong to the tests, not the bot's run log.
+        # assertLogs below can still capture and check the real diagnostic text.
+        logger = logging.getLogger('menu-bot.generation')
+        self.enterContext(patch.object(logger, 'handlers', [logging.NullHandler()]))
+        self.enterContext(patch.object(logger, 'propagate', False))
         self.env = patch.dict(os.environ, CLOUDFLARE_API_TOKEN='test-only-key', CLOUDFLARE_ACCOUNT_ID='a' * 32)
         self.env.start()
         self.addCleanup(self.env.stop)
