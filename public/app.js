@@ -20,7 +20,7 @@ for (const category of categories) {
   });
 }
 
-// One continuous loop, with the current menu rendered by the build step.
+// One centered card at a time, with the current menu rendered by the build step.
 const carousel = document.querySelector('.product-carousel');
 if (carousel) {
   const viewport = carousel.querySelector('.carousel-window');
@@ -53,15 +53,17 @@ if (carousel) {
   let step = 0;
   let offset = 0;
   let cycle = 0;
-  let imageAnchor = 0;
+  let cardAnchor = 0;
   let motion = null;
   let drag = null;
   let paused = reduceMotion.matches || count < 2;
   let hovered = false;
   let focused = false;
   let visible = true;
-  let resumeAt = 0;
-  let lastTime = 0;
+  const autoplayInterval = 4000;
+  const transitionDuration = 700;
+  let autoplayElapsed = 0;
+  let lastTime = null;
 
   const normalize = value => count > 1 ? count * step + ((value - count * step) % cycle + cycle) % cycle : 0;
   const announce = () => {
@@ -69,7 +71,7 @@ if (carousel) {
     status.textContent = `${originals[index].querySelector('.product-name').textContent}, ${originals[index].querySelector('.product-meta').textContent}`;
   };
   const draw = () => {
-    track.style.transform = `translate3d(${viewport.clientWidth * .46 - imageAnchor - offset}px,0,0)`;
+    track.style.transform = `translate3d(${viewport.clientWidth / 2 - cardAnchor - offset}px,0,0)`;
     cards.forEach((card, index) => {
       const distance = Math.abs(index * step - offset) / step;
       card.style.opacity = Math.max(.18, 1 - distance * .32).toFixed(3);
@@ -78,27 +80,30 @@ if (carousel) {
   };
   const layout = () => {
     const progress = step ? offset / step : count > 1 ? count : 0;
-    step = originals[0].offsetWidth + parseFloat(getComputedStyle(track).gap);
+    const cardWidth = parseFloat(getComputedStyle(originals[0]).width);
+    step = cardWidth + parseFloat(getComputedStyle(track).gap);
     cycle = step * count;
-    const image = originals[0].querySelector('.product-image');
-    imageAnchor = image.offsetLeft + image.offsetWidth / 2;
-    offset = normalize(progress * step);
+    cardAnchor = cardWidth / 2;
+    offset = normalize(Math.round(progress) * step);
     motion = null;
     drag = null;
+    autoplayElapsed = 0;
     draw();
   };
-  const go = direction => {
-    if (count < 2) return;
-    const target = (Math.round(offset / step) + direction) * step;
+  const moveTo = target => {
+    autoplayElapsed = 0;
     if (reduceMotion.matches) {
       offset = normalize(target);
       motion = null;
       draw();
       announce();
     } else {
-      motion = { from: offset, to: target, time: performance.now(), duration: 650 };
+      motion = { from: offset, to: target, elapsed: 0 };
     }
-    resumeAt = performance.now() + 3200;
+  };
+  const go = direction => {
+    if (count < 2) return;
+    moveTo((Math.round(offset / step) + direction) * step);
   };
   const updatePlayback = () => {
     playback.setAttribute('aria-pressed', String(paused));
@@ -108,11 +113,13 @@ if (carousel) {
   next.addEventListener('click', () => go(1));
   playback.addEventListener('click', () => {
     paused = !paused;
+    autoplayElapsed = 0;
     updatePlayback();
   });
   viewport.addEventListener('keydown', event => {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();
+      focused = true;
       go(event.key === 'ArrowLeft' ? -1 : 1);
     }
   });
@@ -125,44 +132,54 @@ if (carousel) {
   viewport.addEventListener('pointerdown', event => {
     if (!event.isPrimary || event.button !== 0 || count < 2) return;
     motion = null;
-    drag = { id: event.pointerId, x: event.clientX, from: offset };
+    drag = { id: event.pointerId, x: event.clientX, from: offset, distance: 0 };
+    autoplayElapsed = 0;
     viewport.setPointerCapture(event.pointerId);
   });
   viewport.addEventListener('pointermove', event => {
     if (!drag || drag.id !== event.pointerId) return;
-    offset = normalize(drag.from - (event.clientX - drag.x));
+    drag.distance = Math.max(-step, Math.min(step, event.clientX - drag.x));
+    offset = drag.from - drag.distance;
     draw();
   });
   const finishDrag = event => {
     if (!drag || drag.id !== event.pointerId) return;
+    const cancelled = event.type !== 'pointerup';
+    const direction = !cancelled && Math.abs(drag.distance) >= Math.min(48, step * .15)
+      ? (drag.distance < 0 ? 1 : -1) : 0;
+    const target = (Math.round(drag.from / step) + direction) * step;
     drag = null;
     if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
-    const target = Math.round(offset / step) * step;
-    if (reduceMotion.matches) {
-      offset = normalize(target);
-      draw();
-      announce();
-    } else {
-      motion = { from: offset, to: target, time: performance.now(), duration: 400 };
-    }
-    resumeAt = performance.now() + 3200;
+    moveTo(target);
   };
   viewport.addEventListener('pointerup', finishDrag);
   viewport.addEventListener('pointercancel', finishDrag);
   viewport.addEventListener('lostpointercapture', finishDrag);
   reduceMotion.addEventListener('change', () => {
     paused = reduceMotion.matches || count < 2;
+    autoplayElapsed = 0;
+    if (reduceMotion.matches && motion) moveTo(motion.to);
     updatePlayback();
   });
+  document.addEventListener('visibilitychange', () => {
+    autoplayElapsed = 0;
+    lastTime = null;
+  });
   new ResizeObserver(layout).observe(viewport);
-  new IntersectionObserver(entries => { visible = entries[0].isIntersecting; }).observe(carousel);
+  new IntersectionObserver(entries => {
+    visible = entries[0].isIntersecting;
+    if (!visible) autoplayElapsed = 0;
+  }).observe(carousel);
   const tick = time => {
-    const delta = Math.min((time - (lastTime || time)) / 1000, .05);
+    const delta = lastTime === null ? 0 : Math.max(0, Math.min(time - lastTime, 50));
     lastTime = time;
     if (!document.hidden && visible && !pageDialogOpen) {
       let changed = false;
+      if (!paused && !hovered && !focused && !drag) autoplayElapsed += delta;
+      else autoplayElapsed = 0;
       if (motion) {
-        const progress = Math.min(1, (time - motion.time) / motion.duration);
+        motion.elapsed += delta;
+        const progress = Math.min(1, motion.elapsed / transitionDuration);
         const eased = progress < .5 ? 4 * progress ** 3 : 1 - (-2 * progress + 2) ** 3 / 2;
         offset = motion.from + (motion.to - motion.from) * eased;
         if (progress === 1) {
@@ -171,12 +188,11 @@ if (carousel) {
           announce();
         }
         changed = true;
-      } else if (!paused && !hovered && !focused && !drag && time >= resumeAt) {
-        offset = normalize(offset + delta * 20);
-        changed = true;
+      } else if (!paused && !hovered && !focused && !drag && autoplayElapsed >= autoplayInterval) {
+        go(1);
       }
       if (changed) draw();
-    }
+    } else autoplayElapsed = 0;
     requestAnimationFrame(tick);
   };
   layout();
