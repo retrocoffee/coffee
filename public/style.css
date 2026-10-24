@@ -65,7 +65,7 @@ summary:focus-visible{outline:2px solid var(--red);outline-offset:5px}
 .carousel-arrow:focus-visible,.carousel-playback:focus-visible{outline:2px solid var(--red);outline-offset:3px;border-radius:2px}
 .carousel-playback{position:absolute;clip:rect(0,0,0,0);overflow:hidden;display:grid;place-items:center;width:1px;height:1px;margin:0;border:0;padding:0;background:transparent;color:var(--red);cursor:pointer;opacity:.6}
 .carousel-playback:hover{opacity:1}
-.carousel-playback:focus-visible{position:relative;clip:auto;overflow:visible;width:36px;height:32px;margin:6px auto 0}
+.carousel-playback:focus-visible,.product-carousel.is-manually-paused .carousel-playback{position:relative;clip:auto;overflow:visible;width:36px;height:32px;margin:6px auto 0}
 .carousel-playback .play-symbol{display:none}
 .carousel-playback[aria-pressed="true"] .play-symbol{display:block}
 .carousel-playback[aria-pressed="true"] .pause-symbol{display:none}

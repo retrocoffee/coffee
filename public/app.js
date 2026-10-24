@@ -57,6 +57,7 @@ if (carousel) {
   let motion = null;
   let drag = null;
   let paused = reduceMotion.matches || count < 2;
+  let manuallyPaused = false;
   let hovered = false;
   let focused = false;
   let visible = true;
@@ -101,18 +102,25 @@ if (carousel) {
       motion = { from: offset, to: target, elapsed: 0 };
     }
   };
-  const go = direction => {
+  const go = (direction, manual = false) => {
     if (count < 2) return;
+    if (manual) {
+      manuallyPaused = true;
+      paused = true;
+      updatePlayback();
+    }
     moveTo((Math.round(offset / step) + direction) * step);
   };
   const updatePlayback = () => {
+    carousel.classList.toggle('is-manually-paused', manuallyPaused);
     playback.setAttribute('aria-pressed', String(paused));
     playback.setAttribute('aria-label', paused ? 'Включить автопролистывание' : 'Приостановить автопролистывание');
   };
-  previous.addEventListener('click', () => go(-1));
-  next.addEventListener('click', () => go(1));
+  previous.addEventListener('click', () => go(-1, true));
+  next.addEventListener('click', () => go(1, true));
   playback.addEventListener('click', () => {
     paused = !paused;
+    manuallyPaused = paused;
     autoplayElapsed = 0;
     updatePlayback();
   });
@@ -120,7 +128,7 @@ if (carousel) {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();
       focused = true;
-      go(event.key === 'ArrowLeft' ? -1 : 1);
+      go(event.key === 'ArrowLeft' ? -1 : 1, true);
     }
   });
   carousel.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') hovered = true; });
@@ -148,6 +156,11 @@ if (carousel) {
     const direction = !cancelled && Math.abs(drag.distance) >= Math.min(48, step * .15)
       ? (drag.distance < 0 ? 1 : -1) : 0;
     const target = (Math.round(drag.from / step) + direction) * step;
+    if (direction) {
+      manuallyPaused = true;
+      paused = true;
+      updatePlayback();
+    }
     drag = null;
     if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
     moveTo(target);
@@ -156,7 +169,7 @@ if (carousel) {
   viewport.addEventListener('pointercancel', finishDrag);
   viewport.addEventListener('lostpointercapture', finishDrag);
   reduceMotion.addEventListener('change', () => {
-    paused = reduceMotion.matches || count < 2;
+    paused = manuallyPaused || reduceMotion.matches || count < 2;
     autoplayElapsed = 0;
     if (reduceMotion.matches && motion) moveTo(motion.to);
     updatePlayback();
