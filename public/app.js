@@ -28,7 +28,6 @@ if (carousel) {
   const originals = [...track.children];
   const previous = carousel.querySelector('.carousel-previous');
   const next = carousel.querySelector('.carousel-next');
-  const playback = carousel.querySelector('.carousel-playback');
   const status = carousel.querySelector('.carousel-status');
   const count = originals.length;
   const clone = card => {
@@ -40,7 +39,7 @@ if (carousel) {
   if (count > 1) {
     track.prepend(...originals.map(clone));
     track.append(...originals.map(clone));
-    [previous, next, playback].forEach(button => { button.hidden = false; });
+    [previous, next].forEach(button => { button.hidden = false; });
   }
   originals.forEach((card, index) => {
     card.setAttribute('role', 'group');
@@ -57,7 +56,9 @@ if (carousel) {
   let motion = null;
   let drag = null;
   let paused = reduceMotion.matches || count < 2;
-  let manuallyPaused = false;
+  let manuallyBrowsed = false;
+  let manualIdleElapsed = null;
+  const manualResumeDelay = 10000;
   let hovered = false;
   let focused = false;
   let visible = true;
@@ -105,25 +106,13 @@ if (carousel) {
   const go = (direction, manual = false) => {
     if (count < 2) return;
     if (manual) {
-      manuallyPaused = true;
-      paused = true;
-      updatePlayback();
+      manuallyBrowsed = true;
+      manualIdleElapsed = 0;
     }
     moveTo((Math.round(offset / step) + direction) * step);
   };
-  const updatePlayback = () => {
-    carousel.classList.toggle('is-manually-paused', manuallyPaused);
-    playback.setAttribute('aria-pressed', String(paused));
-    playback.setAttribute('aria-label', paused ? 'Включить автопролистывание' : 'Приостановить автопролистывание');
-  };
   previous.addEventListener('click', () => go(-1, true));
   next.addEventListener('click', () => go(1, true));
-  playback.addEventListener('click', () => {
-    paused = !paused;
-    manuallyPaused = paused;
-    autoplayElapsed = 0;
-    updatePlayback();
-  });
   viewport.addEventListener('keydown', event => {
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();
@@ -140,6 +129,7 @@ if (carousel) {
   viewport.addEventListener('pointerdown', event => {
     if (!event.isPrimary || event.button !== 0 || count < 2) return;
     motion = null;
+    if (manuallyBrowsed) manualIdleElapsed = 0;
     drag = { id: event.pointerId, x: event.clientX, from: offset, distance: 0 };
     autoplayElapsed = 0;
     viewport.setPointerCapture(event.pointerId);
@@ -157,9 +147,8 @@ if (carousel) {
       ? (drag.distance < 0 ? 1 : -1) : 0;
     const target = (Math.round(drag.from / step) + direction) * step;
     if (direction) {
-      manuallyPaused = true;
-      paused = true;
-      updatePlayback();
+      manuallyBrowsed = true;
+      manualIdleElapsed = 0;
     }
     drag = null;
     if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
@@ -169,14 +158,14 @@ if (carousel) {
   viewport.addEventListener('pointercancel', finishDrag);
   viewport.addEventListener('lostpointercapture', finishDrag);
   reduceMotion.addEventListener('change', () => {
-    paused = manuallyPaused || reduceMotion.matches || count < 2;
+    paused = reduceMotion.matches || count < 2;
     autoplayElapsed = 0;
     if (reduceMotion.matches && motion) moveTo(motion.to);
-    updatePlayback();
   });
   document.addEventListener('visibilitychange', () => {
     autoplayElapsed = 0;
     lastTime = null;
+    if (manualIdleElapsed !== null) manualIdleElapsed = 0;
   });
   new ResizeObserver(layout).observe(viewport);
   new IntersectionObserver(entries => {
@@ -188,7 +177,17 @@ if (carousel) {
     lastTime = time;
     if (!document.hidden && visible && !pageDialogOpen) {
       let changed = false;
-      if (!paused && !hovered && !focused && !drag) autoplayElapsed += delta;
+      // Manual navigation resumes after inactivity even if the pointer or focus
+      // remains on the arrows. A held drag must never advance the countdown.
+      if (manualIdleElapsed !== null) {
+        manualIdleElapsed = drag ? 0 : manualIdleElapsed + delta;
+        if (manualIdleElapsed >= manualResumeDelay) {
+          manualIdleElapsed = null;
+          autoplayElapsed = autoplayInterval;
+        }
+      }
+      const canAutoplay = !paused && !drag && (manuallyBrowsed || (!hovered && !focused));
+      if (canAutoplay && manualIdleElapsed === null) autoplayElapsed += delta;
       else autoplayElapsed = 0;
       if (motion) {
         motion.elapsed += delta;
@@ -201,15 +200,17 @@ if (carousel) {
           announce();
         }
         changed = true;
-      } else if (!paused && !hovered && !focused && !drag && autoplayElapsed >= autoplayInterval) {
+      } else if (canAutoplay && manualIdleElapsed === null && autoplayElapsed >= autoplayInterval) {
         go(1);
       }
       if (changed) draw();
-    } else autoplayElapsed = 0;
+    } else {
+      autoplayElapsed = 0;
+      if (manualIdleElapsed !== null) manualIdleElapsed = 0;
+    }
     requestAnimationFrame(tick);
   };
   layout();
-  updatePlayback();
   requestAnimationFrame(tick);
 }
 

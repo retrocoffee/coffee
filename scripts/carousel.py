@@ -47,9 +47,5 @@ def render_carousel(menu):
 </div>
 <button class="carousel-arrow carousel-previous" type="button" aria-label="Предыдущая позиция" hidden>{arrow}</button>
 <button class="carousel-arrow carousel-next" type="button" aria-label="Следующая позиция" hidden>{arrow}</button>
-<button class="carousel-playback" type="button" aria-label="Приостановить автопролистывание" aria-pressed="false" hidden>
-<svg class="pause-symbol" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M5 3v10M11 3v10" stroke="currentColor" stroke-width="2"/></svg>
-<svg class="play-symbol" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m5 3 8 5-8 5Z" fill="currentColor"/></svg>
-</button>
 <span class="visually-hidden carousel-status" aria-live="polite" aria-atomic="true"></span>
 </section>'''
