@@ -21,5 +21,5 @@ def image_for(entry, image):
     original = './assets/menu-images/7f4d43cf8f71d72389e7879ec507a2b73c2d2d13cb256ce971d76df2ab45d72e.webp'
     if (enabled() and not entry.get('custom_image') and image == original
             and (entry['section'], entry['group'], entry['item']) == ('seasonal', 'g1', 'i3')):
-        return './assets/products/pumpkin-raf-halloween.webp'
+        return './assets/products/pumpkin-raf-blinking.svg'
     return image

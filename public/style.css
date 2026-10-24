@@ -54,6 +54,7 @@ html[data-season="halloween"] #seasonal:not([open]) .expand-icon:after{display:n
 .product-carousel.is-ready .carousel-track{will-change:transform}
 .product-card{position:relative;display:grid;grid-template-columns:26% minmax(0,1fr);align-items:center;gap:10px;width:var(--card-width);flex:0 0 var(--card-width);min-height:146px;padding:8px 4px;text-align:left;user-select:none;transform-origin:center 48%}
 .product-image{display:block;width:115%;margin-inline:-7.5%;height:auto;aspect-ratio:460/420;object-fit:contain;pointer-events:none;-webkit-user-drag:none}
+.product-art{display:block;min-width:0}
 .product-copy{display:flex;flex-direction:column;justify-content:center;align-self:center;min-width:0;padding:4px 2px 4px 0}
 .product-description{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:5px 0 8px;font-size:clamp(13px,2.2vw,17px);line-height:1.35;opacity:.58;overflow-wrap:anywhere}
 .product-name{margin:0;font:400 clamp(18px,3.45vw,27px)/1.2 Retro,Arial,sans-serif;letter-spacing:-.035em}

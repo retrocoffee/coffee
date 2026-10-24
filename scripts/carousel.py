@@ -32,8 +32,11 @@ def render_carousel(menu):
         image = seasonal.image_for(entry, image)
         if not selection.valid_image(image) or not Path('public', image[2:]).is_file():
             raise ValueError('Invalid carousel image: ' + image)
+        picture = f'<img class="product-image" src="{escape(image)}" alt="{escape(item["name"])}" width="460" height="420" decoding="async">'
+        if image == './assets/products/pumpkin-raf-blinking.svg':
+            picture = '<picture class="product-art"><source media="(prefers-reduced-motion: reduce)" srcset="./assets/products/pumpkin-raf-face-static.svg">' + picture + '</picture>'
         cards.append(f'''<article class="product-card">
-<img class="product-image" src="{escape(image)}" alt="{escape(item['name'])}" width="460" height="420" decoding="async">
+{picture}
 <div class="product-copy">
 <h2 class="product-name">{escape(item['name'])}</h2>
 <p class="product-description">{escape(description)}</p>
