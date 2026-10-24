@@ -19,6 +19,7 @@ from bot.images import MAX_IMAGE_BYTES, prepare_image, valid_image_path
 from bot.generation import SETUP_MESSAGE, available, description_text, generate_image
 from bot import site as cafe
 from bot import generation_settings as artwork
+from bot import carousel as slides
 
 LOG = logging.getLogger('menu-bot')
 
@@ -29,6 +30,7 @@ REPLY_ACTIONS = {
     '✖ Отмена': 'home',
     'ℹ О кофейне': 'site',
     '⚙ Генерация': 'generation-settings',
+    '🎠 Карусель': 'carousel',
 }
 
 
@@ -220,6 +222,7 @@ class Bot:
                     [{'text': '🏠 Главное меню'}, {'text': '📥 Массовая загрузка'}],
                     [{'text': '🕘 История меню'}, {'text': '✖ Отмена'}],
                     [{'text': 'ℹ О кофейне'}, {'text': '⚙ Генерация'}],
+                    [{'text': '🎠 Карусель'}],
                 ],
                 'resize_keyboard': True,
                 'is_persistent': True,
@@ -343,11 +346,150 @@ class Bot:
         buttons = [(('🙈 ' if s['hidden'] else '') + s['name'], ('section', s['id'])) for s in sections[page*15:(page+1)*15]]
         if page: buttons.append(('← Предыдущие разделы', ('home', page-1)))
         if (page+1)*15 < len(sections): buttons.append(('Следующие разделы →', ('home', page+1)))
-        buttons += [('⚙ Настройки генерации', ('generation-settings',)),
+        buttons += [('🎠 Карусель', ('carousel',)), ('⚙ Настройки генерации', ('generation-settings',)),
                     ('ℹ Сведения о кофейне', ('site',)), ('📥 Массовая загрузка', ('bulk-mode',)),
                     ('＋ Раздел', ('input', 'section-add')), ('🕘 История меню', ('history', 0)),
                     ('↻ Опубликовать повторно', ('deploy',))]
         self.send(uid, 'Управление меню\nВыберите раздел. 🙈 — скрыт с сайта.\n/start — обновить меню, /cancel — отменить ввод.', buttons)
+
+    def carousel_open(self, uid):
+        self.cancel_generation(uid)
+        state = self.sessions[uid]
+        state.pop('input', None)
+        state['carousel_draft'] = slides.load()
+        state['carousel_base'] = slides.fingerprint(state['carousel_draft'])
+        state['carousel_assets'] = {}
+        self.carousel_show(uid)
+
+    def carousel_show(self, uid, index=None, page=0):
+        state = self.sessions[uid]
+        state.pop('input', None)
+        entries = state['carousel_draft']
+        def name(entry):
+            found = slides.lookup(state['menu'], entry)
+            return found[2]['name'] if found else 'Удалена из меню: ' + entry['item']
+        if index is not None:
+            entry = entries[index]
+            found = slides.lookup(state['menu'], entry)
+            text = name(entry) + ('\nСкрыта из карусели.' if entry.get('hidden') else '')
+            if found:
+                text += '\nЦена: ' + '; '.join(found[2]['prices']) + '\nОбъёмы: ' + ('; '.join(found[1]['columns']) or 'из меню')
+            description = entry.get('description_override', (' '.join(found[2]['notes']) if found else '') or entry.get('description', ''))
+            text += '\nОписание: ' + (description or 'без описания')
+            text += '\nКартинка: ' + ('отдельная для карусели' if entry.get('custom_image') else 'из меню или исходной подборки')
+            text += '\nНазвание, цена и объём связаны с меню. Своя картинка и описание меняют только карусель.'
+            buttons = []
+            if index: buttons.append(('↑ Выше', ('carousel-move', index, -1)))
+            if index + 1 < len(entries): buttons.append(('↓ Ниже', ('carousel-move', index, 1)))
+            buttons += [('Показать' if entry.get('hidden') else 'Скрыть', ('carousel-hide', index)),
+                        ('🖼 Заменить картинку', ('carousel-image', index)),
+                        ('↺ Картинка из меню', ('carousel-image-reset', index)),
+                        ('✎ Описание для карусели', ('carousel-description', index)),
+                        ('↺ Описание из меню', ('carousel-description-reset', index)),
+                        ('Удалить из карусели', ('carousel-remove-ask', index)),
+                        ('← Подборка', ('carousel-list', index // 8))]
+            return self.send(uid, text + '\n\nИзменения применятся после сохранения всей подборки.', buttons)
+        buttons = [(f'{i+1}. ' + ('🙈 ' if e.get('hidden') else '') + name(e), ('carousel-entry', i))
+                   for i, e in enumerate(entries) if page*8 <= i < (page+1)*8]
+        if page: buttons.append(('← Назад', ('carousel-list', page-1)))
+        if (page+1)*8 < len(entries): buttons.append(('Далее →', ('carousel-list', page+1)))
+        buttons += [('＋ Позиция из меню', ('carousel-add',)), ('✓ Сохранить подборку', ('carousel-save-ask',)),
+                    ('Отмена изменений', ('home',))]
+        pending = slides.fingerprint(entries) != state['carousel_base']
+        self.send(uid, f'Карусель: {len(entries)} позиций\nВыберите карточку для изменения порядка, картинки или описания.'
+                  + ('\nЕсть несохранённые изменения.' if pending else '')
+                  + '\nУдаление из подборки не удаляет позицию из меню. Пустая подборка убирает карусель с сайта.', buttons)
+
+    def carousel_upload(self, uid, msg):
+        state = self.sessions[uid]
+        _, (index,) = state['input']
+        photos = msg.get('photo', [])
+        upload = photos[-1] if photos else msg.get('document')
+        if not upload or upload.get('file_size', 0) > MAX_IMAGE_BYTES:
+            raise ValueError('Отправьте фото или файл JPG, PNG, WebP до 5 МБ.')
+        image, data = prepare_image(self.download_file(upload['file_id'], MAX_IMAGE_BYTES))
+        state['carousel_draft'][index].update(image=image, custom_image=True)
+        state['carousel_assets'][image] = data
+        self.carousel_show(uid, index)
+
+    def carousel_action(self, uid, op, args, update_id):
+        if op == 'carousel': return self.carousel_open(uid)
+        state = self.sessions[uid]
+        entries = state['carousel_draft']
+        if op == 'carousel-list': return self.carousel_show(uid, page=args[0])
+        if op == 'carousel-entry': return self.carousel_show(uid, args[0])
+        if op == 'carousel-add':
+            if len(entries) >= slides.MAX_ITEMS: raise ValueError('В карусели уже 50 позиций.')
+            if not args:
+                return self.send(uid, 'Добавить из раздела:', [(s['name'], ('carousel-add', s['id'])) for s in state['menu']['sections']]
+                                 + [('← Подборка', ('carousel-list', 0))])
+            section = next(s for s in state['menu']['sections'] if s['id'] == args[0])
+            if len(args) == 1:
+                return self.send(uid, 'Выберите группу:', [(g['heading'] or g['caption'], ('carousel-add', section['id'], g['id'])) for g in section['groups']]
+                                 + [('← Разделы', ('carousel-add',))])
+            group = next(g for g in section['groups'] if g['id'] == args[1])
+            page = args[2] if len(args) > 2 else 0
+            keys = {slides.key(e) for e in entries}
+            buttons = [(('✓ ' if (section['id'], group['id'], i['id']) in keys else '') + i['name'],
+                        ('carousel-pick', section['id'], group['id'], i['id'])) for i in group['items'][page*10:(page+1)*10]]
+            if page: buttons.append(('← Назад', ('carousel-add', section['id'], group['id'], page-1)))
+            if (page+1)*10 < len(group['items']): buttons.append(('Далее →', ('carousel-add', section['id'], group['id'], page+1)))
+            return self.send(uid, 'Выберите позицию. ✓ — уже в подборке. Скрытые разделы и недоступные позиции не показываются на сайте.',
+                             buttons + [('← Подборка', ('carousel-list', 0))])
+        if op == 'carousel-pick':
+            if len(entries) >= slides.MAX_ITEMS: raise ValueError('В карусели уже 50 позиций.')
+            if tuple(args) in {slides.key(e) for e in entries}: raise ValueError('Эта позиция уже есть в карусели.')
+            entries.append(slides.new_entry(*self.find(uid, *args)))
+            return self.carousel_show(uid, len(entries)-1)
+        if op == 'carousel-save-ask':
+            names = []
+            for i, entry in enumerate(entries):
+                found = slides.lookup(state['menu'], entry)
+                names.append(f'{i+1}. ' + ('🙈 ' if entry.get('hidden') else '') + (found[2]['name'] if found else 'Удалена из меню'))
+            summary = '\n'.join(names[:15]) + (f'\nИ ещё {len(names)-15} — см. список подборки.' if len(names)>15 else '')
+            return self.send(uid, f'Сохранить карусель ({len(entries)} позиций) и опубликовать сайт?\n\n' + (summary or 'Пустая подборка — карусель будет скрыта.'),
+                             [('✓ Сохранить и опубликовать', ('carousel-save',)), ('← Вернуться', ('carousel-list', 0))])
+        if op == 'carousel-save':
+            changed = slides.publish(entries, state['carousel_base'], state['carousel_assets'], update_id, git)
+            state['carousel_base'] = slides.fingerprint(entries)
+            state['carousel_assets'] = {}
+            message = 'Изменений нет.'
+            if changed:
+                try:
+                    dispatch()
+                    message = 'Карусель сохранена. Публикация сайта запущена.'
+                except Exception:
+                    message = 'Карусель сохранена, но публикация не запущена. Нажмите «Опубликовать повторно» в главном меню.'
+            return self.send(uid, message, [('← Подборка', ('carousel-list', 0)), ('← Главное меню', ('home',))])
+        index = args[0]
+        entry = entries[index]
+        if op == 'carousel-move':
+            target = index + args[1]
+            if not 0 <= target < len(entries): raise ValueError('Нельзя переместить дальше края подборки.')
+            entries[index], entries[target] = entries[target], entries[index]
+            index = target
+        elif op == 'carousel-hide': entry['hidden'] = not entry.get('hidden', False)
+        elif op == 'carousel-image':
+            state['input'] = ('carousel-image', (index,))
+            return self.send(uid, 'Отправьте фото или файл JPG, PNG, WebP до 5 МБ. Картинка изменится только в карусели, после сохранения подборки.',
+                             [('Отмена загрузки', ('carousel-entry', index))])
+        elif op == 'carousel-image-reset':
+            found = slides.lookup(state['menu'], entry)
+            if not found: raise ValueError('Позиция удалена из меню. Удалите карточку из подборки.')
+            entry['image'] = slides.new_entry(*found)['image']
+            entry.pop('custom_image', None)
+        elif op == 'carousel-description':
+            state['input'] = ('carousel-description', (index,))
+            return self.send(uid, 'Отправьте описание для карусели до 1000 символов. «-» — без описания. Меню останется прежним.', [('Отмена ввода', ('carousel-entry', index))])
+        elif op == 'carousel-description-reset': entry.pop('description_override', None)
+        elif op == 'carousel-remove-ask':
+            return self.send(uid, 'Удалить карточку только из подборки? Позиция в меню сохранится.',
+                             [('Удалить из подборки', ('carousel-remove', index)), ('Отмена', ('carousel-entry', index))])
+        elif op == 'carousel-remove':
+            entries.pop(index)
+            return self.carousel_show(uid, page=min(index//8, max(0, (len(entries)-1)//8)))
+        else: raise ValueError('Неизвестное действие карусели.')
+        self.carousel_show(uid, index)
 
     def section(self, uid, sid):
         s = self.find(uid, sid)[0]
@@ -770,6 +912,11 @@ class Bot:
     def input(self, uid, raw):
         state = self.sessions[uid]
         kind, ids = state['input']
+        if kind == 'carousel-description':
+            if not isinstance(raw, str) or not raw.strip() or len(raw) > 1000:
+                raise ValueError('Описание — от 1 до 1000 символов; «-» убирает описание.')
+            state['carousel_draft'][ids[0]]['description_override'] = '' if raw.strip() == '-' else raw.strip()
+            return self.carousel_show(uid, ids[0])
         if kind == 'bulk':
             return self.bulk_input(uid, raw)
         if kind in ('site-field', 'site-social'):
@@ -821,6 +968,8 @@ class Bot:
         if op == 'home': return self.home(uid, *args)
         if uid not in self.sessions:
             return self.send(uid, 'Бот перезапущен. Откройте /start.')
+        if op == 'carousel' or op.startswith('carousel-'):
+            return self.carousel_action(uid, op, args, update_id)
         if op == 'site' or op.startswith('site-'):
             return self.site_action(uid, op, args, update_id)
         if op == 'section': return self.section(uid, *args)
@@ -968,6 +1117,8 @@ class Bot:
                 elif text.split('@')[0] in ('/start', '/cancel'):
                     self.home(uid)
                 elif uid in self.sessions and 'input' in self.sessions[uid]:
+                    if self.sessions[uid]['input'][0] == 'carousel-image':
+                        return self.carousel_upload(uid, msg)
                     if self.sessions[uid]['input'][0] == 'image':
                         return self.image_input(uid, msg)
                     if 'document' in msg:
@@ -979,6 +1130,8 @@ class Bot:
                     self.send(uid, 'Откройте /start для управления меню.')
         except ValueError as error:
             buttons = [('← Главное меню', ('home',))]
+            if 'carousel_draft' in self.sessions.get(uid, {}):
+                buttons.insert(0, ('← Карусель', ('carousel-list', 0)))
             if self.sessions.get(uid, {}).get('input', (None,))[0] == 'bulk':
                 buttons.insert(0, ('📄 Скачать шаблон', ('bulk-template',)))
             hint = '\nИсправьте файл и отправьте его снова.' if len(buttons) > 1 else ''

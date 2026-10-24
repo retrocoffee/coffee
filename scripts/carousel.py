@@ -1,15 +1,16 @@
 """Render featured drinks from current menu data; no separate copy of prices."""
-import json
 import re
 from html import escape
 from pathlib import Path
-from bot.images import valid_image_path
+from bot import carousel as selection
 
 
 def render_carousel(menu):
-    entries = json.loads(Path('data/carousel.json').read_text())
+    entries = selection.load()
     cards = []
     for entry in entries:
+        if entry.get('hidden'):
+            continue
         section = next((s for s in menu['sections'] if s['id'] == entry['section'] and not s['hidden']), None)
         if section is None:
             continue
@@ -25,8 +26,9 @@ def render_carousel(menu):
         volume = group['columns'][variant] if group['columns'] else next(
             (note for note in item['notes'] if re.fullmatch(r'\d+(?:[.,]\d+)?\s*(?:мл|л|г|гр\.)', note)), '')
         description = ' '.join(note for note in item['notes'] if note != volume) or entry.get('description', '')
-        image = item.get('image', entry['image'])
-        if not (valid_image_path(image) or re.fullmatch(r'\./assets/products/[a-z0-9-]+\.(?:svg|png|webp|jpe?g|avif)', image)) or not Path('public', image[2:]).is_file():
+        description = entry.get('description_override', description)
+        image = entry['image'] if entry.get('custom_image') else item.get('image', entry['image'])
+        if not selection.valid_image(image) or not Path('public', image[2:]).is_file():
             raise ValueError('Invalid carousel image: ' + image)
         cards.append(f'''<article class="product-card">
 <img class="product-image" src="{escape(image)}" alt="{escape(item['name'])}" width="460" height="420" decoding="async">
