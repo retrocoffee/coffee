@@ -1,47 +1,5 @@
 [
   {
-    "section": "coffee",
-    "group": "g2",
-    "item": "i2",
-    "image": "./assets/products/cappuccino.svg",
-    "description": "Кофе, молоко и воздушная молочная пена."
-  },
-  {
-    "section": "coffee",
-    "group": "g2",
-    "item": "i6",
-    "image": "./assets/products/latte.svg",
-    "description": "Эспрессо и молоко с тонким слоем пены."
-  },
-  {
-    "section": "coffee",
-    "group": "g2",
-    "item": "i9",
-    "image": "./assets/products/raf.svg",
-    "description": "Нежный кофе со сливками и ванильным сахаром."
-  },
-  {
-    "section": "not-coffee",
-    "group": "g1",
-    "item": "i1",
-    "image": "./assets/products/matcha.svg",
-    "description": "Матча и молоко."
-  },
-  {
-    "section": "iced-milk",
-    "group": "g1",
-    "item": "i1",
-    "image": "./assets/products/iced-latte.svg",
-    "description": "Кофе, молоко и лёд."
-  },
-  {
-    "section": "coffee",
-    "group": "g1",
-    "item": "i1",
-    "image": "./assets/products/espresso.svg",
-    "description": "Насыщенный кофе с плотной крема."
-  },
-  {
     "section": "seasonal",
     "group": "g1",
     "item": "i1",
