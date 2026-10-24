@@ -22,7 +22,7 @@ summary>span:first-child{font-size:clamp(28px,7.1vw,56px);line-height:1.19;lette
 .expand-icon:after{height:18px;width:2px;left:9px;top:1px}
 details[open] .expand-icon:after{display:none}
 summary:focus-visible{outline:2px solid var(--red);outline-offset:5px}
-html[data-season="halloween"] #seasonal:not([open]) .expand-icon:before{inset:0;width:100%;height:100%;border-radius:0;background:transparent url('./assets/halloween/pumpkin-toggle.svg') center/contain no-repeat}
+html[data-season="halloween"] #seasonal:not([open]) .expand-icon:before{inset:0;width:100%;height:100%;border-radius:0;background:transparent url('./assets/halloween/pumpkin-toggle.svg?v=face-20261024') center/contain no-repeat}
 html[data-season="halloween"] #seasonal:not([open]) .expand-icon:after{display:none}
 .category-content{padding:0 2px 22px}
 .price-table{border-collapse:collapse;width:100%;table-layout:auto;font-size:15px;line-height:1.45;margin:0}
