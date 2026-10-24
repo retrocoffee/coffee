@@ -40,5 +40,40 @@
     "item": "i1",
     "image": "./assets/products/espresso.svg",
     "description": "Насыщенный кофе с плотной крема."
+  },
+  {
+    "section": "seasonal",
+    "group": "g1",
+    "item": "i1",
+    "image": "./assets/menu-images/e19eddb9e41ea754d86c6c3779c4a806bd942f90fe635f309d7c5a5b8edec42a.webp",
+    "description": "Безалкогольный глинтвейн с клюквой и пряностями."
+  },
+  {
+    "section": "seasonal",
+    "group": "g1",
+    "item": "i2",
+    "image": "./assets/menu-images/fb66873c14567119879546aafc7f237f22b83d1ae1ed294d5ccb24d9ebe57f4e.webp",
+    "description": "Сбитень с мёдом, облепихой и травами."
+  },
+  {
+    "section": "seasonal",
+    "group": "g1",
+    "item": "i3",
+    "image": "./assets/menu-images/7f4d43cf8f71d72389e7879ec507a2b73c2d2d13cb256ce971d76df2ab45d72e.webp",
+    "description": "Раф с пряной тыквой."
+  },
+  {
+    "section": "seasonal",
+    "group": "g1",
+    "item": "i4",
+    "image": "./assets/menu-images/2996dd9e2c41537ed468cce4fc13ed44453446710700ac6f77947190f2bf5319.webp",
+    "description": "Согревающий какао с имбирём и зефирками."
+  },
+  {
+    "section": "iced-milk",
+    "group": "g1",
+    "item": "i6",
+    "image": "./assets/products/oreo-milkshake.webp",
+    "description": "Молочный коктейль с печеньем «Орео» и взбитыми сливками."
   }
 ]
