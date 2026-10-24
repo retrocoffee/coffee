@@ -3,6 +3,7 @@ import re
 from html import escape
 from pathlib import Path
 from bot import carousel as selection
+from scripts import seasonal
 
 
 def render_carousel(menu):
@@ -28,6 +29,7 @@ def render_carousel(menu):
         description = ' '.join(note for note in item['notes'] if note != volume) or entry.get('description', '')
         description = entry.get('description_override', description)
         image = entry['image'] if entry.get('custom_image') else item.get('image', entry['image'])
+        image = seasonal.image_for(entry, image)
         if not selection.valid_image(image) or not Path('public', image[2:]).is_file():
             raise ValueError('Invalid carousel image: ' + image)
         cards.append(f'''<article class="product-card">

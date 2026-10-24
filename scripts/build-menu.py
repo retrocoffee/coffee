@@ -7,9 +7,15 @@ from bot.menu import load, render
 from scripts.carousel import render_carousel
 from bot.site import load as load_site
 from scripts.site import render_site
+from scripts import seasonal
 
 page = Path('public/index.html')
 html = page.read_text()
+html = re.sub(r'\sdata-season="halloween"', '', html, count=1)
+if seasonal.enabled():
+    html, season_count = re.subn(r'(<html\b[^>]*)(>)', r'\1 data-season="halloween"\2', html, count=1)
+    if season_count != 1:
+        raise SystemExit('Expected one html element for seasonal decorations')
 menu = load()
 pattern = r'(<main\b[^>]*class="menu"[^>]*>)[\s\S]*?(</main>)'
 html, count = re.subn(pattern, lambda m: m[1] + '\n' + render(menu) + '\n' + m[2], html)
