@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "handle": "@retrocoffe_nv",
+  "handle": "Соц. сети",
   "name": "Ретро Кофе",
   "about_text": "Кофе, сезонные напитки и маленький повод замедлиться. Ждём вас в нашей кофейне в Нижневартовске.",
   "owner_text": "",
@@ -17,6 +17,10 @@
   "registry_url": "https://www.rusprofile.ru/ip/326860000000529",
   "review_url": "https://2gis.ru/nizhnevartovsk/firm/70000001113884357",
   "socials": [
-    {"id": "vk", "name": "ВКонтакте", "url": "https://vk.com/retrocoffeenv"}
+    {
+      "id": "vk",
+      "name": "ВКонтакте",
+      "url": "https://vk.com/retrocoffeenv"
+    }
   ]
 }
