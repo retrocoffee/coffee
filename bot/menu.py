@@ -1,9 +1,19 @@
 """Menu schema shared by the renderer and Telegram editor (standard library only)."""
 import json
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 import re
 from html import escape
 from pathlib import Path
 from bot.images import menu_image, valid_image_path
+
+def local_day():
+    return datetime.now(ZoneInfo('Asia/Yekaterinburg')).date()
+
+
+def is_unavailable(item):
+    return item.get('unavailable_on') == local_day().isoformat()
+
 
 MENU_PATH = Path('data/menu.json')
 
@@ -39,6 +49,9 @@ def validate(menu):
             ids(group['items'])
             for item in group['items']:
                 text(item['name'], 200)
+                if 'unavailable_on' in item:
+                    try: date.fromisoformat(item['unavailable_on'])
+                    except (ValueError, TypeError): raise ValueError('Некорректная дата отсутствия позиции')
                 if 'image' in item and not valid_image_path(item['image']):
                     raise ValueError('Некорректная картинка позиции')
                 for note in item['notes']:
@@ -92,13 +105,21 @@ def render(menu):
             if group['heading']:
                 out.append(f'<h2 class="subheading">{escape(group["heading"])}</h2>')
             out.append(f'<table class="price-table {group["kind"]}"><caption class="visually-hidden">{escape(group["caption"])}</caption>')
-            if group['columns']:
-                out.append('<thead><tr><th scope="col"><span class="visually-hidden">Напиток</span></th>' + ''.join(f'<th scope="col">{escape(col)}</th>' for col in group['columns']) + '</tr></thead>')
             out.append('<tbody>')
             for item in group['items']:
-                notes = ''.join(f'<span class="item-note">{escape(note)}</span>' for note in item['notes'])
+                volume_notes = [note for note in item['notes'] if re.fullmatch(r'\d+(?:[.,]\d+)?\s*(?:мл|л|г|гр\.)', note)]
+                descriptions = [note for note in item['notes'] if note not in volume_notes]
+                notes = ''.join(f'<span class="item-note">{escape(note)}</span>' for note in descriptions)
+                if sum(map(len, descriptions)) > 110:
+                    notes = '<details class="item-description"><summary>Состав и описание</summary>' + notes + '</details>'
+                variants = []
+                for n, price in enumerate(item['prices']):
+                    volume = group['columns'][n] if group['columns'] else ' · '.join(volume_notes)
+                    variants.append('<span class="menu-variant">' + (f'<span class="menu-volume">{escape(volume)}</span>' if volume else '') + f'<span>{escape(price)}</span></span>')
                 image = escape(menu_image(section, group, item), quote=True)
-                out.append(f'<tr id="{item_anchor(section, group, item)}" tabindex="-1"><th scope="row"><span class="menu-item"><img class="menu-item-image" src="{image}" alt="" width="38" height="42" loading="lazy" decoding="async"><span class="menu-item-copy">{escape(item["name"])}{notes}</span></span></th>' + ''.join(f'<td>{escape(price)}</td>' for price in item['prices']) + '</tr>')
+                badge = '<span class="availability-label"' + ('' if is_unavailable(item) else ' hidden') + '>Сегодня нет</span>'
+                day = escape(item.get('unavailable_on', ''), quote=True)
+                out.append(f'<tr id="{item_anchor(section, group, item)}" tabindex="-1" data-unavailable-on="{day}"><th scope="row"><div class="menu-item"><img class="menu-item-image" src="{image}" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">{escape(item["name"])}{badge}{notes}</div></div></th><td class="menu-prices">' + ''.join(variants) + '</td></tr>')
             out.append('</tbody></table>')
         out.append('</div></details>')
     return '\n'.join(out)

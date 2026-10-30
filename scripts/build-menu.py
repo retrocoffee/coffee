@@ -8,10 +8,15 @@ from scripts.carousel import render_carousel
 from bot.site import load as load_site
 from scripts.site import render_site
 from scripts import seasonal
+from bot import season
 
 page = Path('public/index.html')
 html = page.read_text()
 html = re.sub(r'\sdata-season="halloween"', '', html, count=1)
+html = re.sub(r'\sdata-season-until="[^"]*"', '', html, count=1)
+until = season.load().get('until', '')
+if until:
+    html = html.replace('<html ', f'<html data-season-until="{until}" ', 1)
 if seasonal.enabled():
     html, season_count = re.subn(r'(<html\b[^>]*)(>)', r'\1 data-season="halloween"\2', html, count=1)
     if season_count != 1:

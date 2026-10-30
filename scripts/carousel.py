@@ -3,7 +3,7 @@ import re
 from html import escape
 from pathlib import Path
 from bot import carousel as selection
-from bot.menu import item_anchor
+from bot.menu import item_anchor, is_unavailable
 from scripts import seasonal
 
 
@@ -20,7 +20,7 @@ def render_carousel(menu):
         if group is None:
             continue
         item = next((i for i in group['items'] if i['id'] == entry['item']), None)
-        if item is None:
+        if item is None or is_unavailable(item):
             continue
         variant = next((n for n,p in enumerate(item['prices']) if p != '—'), None)
         if variant is None:

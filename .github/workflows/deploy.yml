@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '5 19 * * *' # 00:05 in the cafe timezone: refresh daily availability.
 permissions:
   contents: read
 concurrency:

@@ -14,12 +14,14 @@ import urllib.request
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from bot.bulk import MAX_BYTES, apply_csv, export_csv
-from bot.menu import MENU_PATH, encode, load, prices, validate
+from bot.menu import MENU_PATH, encode, load, prices, validate, local_day, is_unavailable
 from bot.images import MAX_IMAGE_BYTES, prepare_image, valid_image_path
 from bot.generation import SETUP_MESSAGE, available, description_text, generate_image
 from bot import site as cafe
 from bot import generation_settings as artwork
 from bot import carousel as slides
+from bot import season
+from bot.preview import document as preview_document
 
 LOG = logging.getLogger('menu-bot')
 
@@ -349,6 +351,8 @@ class Bot:
         buttons += [('🎠 Карусель', ('carousel',)), ('⚙ Настройки генерации', ('generation-settings',)),
                     ('ℹ Сведения о кофейне', ('site',)), ('📥 Массовая загрузка', ('bulk-mode',)),
                     ('＋ Раздел', ('input', 'section-add')), ('🕘 История меню', ('history', 0)),
+                    ('↩ Отменить последнюю правку меню', ('undo-menu',)),
+                    ('🎃 Сезонное оформление', ('season',)),
                     ('↻ Опубликовать повторно', ('deploy',))]
         self.send(uid, 'Управление меню\nВыберите раздел. 🙈 — скрыт с сайта.\n/start — обновить меню, /cancel — отменить ввод.', buttons)
 
@@ -641,11 +645,12 @@ class Bot:
     def item(self, uid, sid, gid, iid):
         _, g, i = self.find(uid, sid, gid, iid)
         details = '\n'.join(f'{c}: {p}' for c,p in zip(g['columns'] or ['Цена'], i['prices']))
-        self.send(uid, i['name'] + '\n' + details + '\n' + '\n'.join(i['notes']), [
+        self.send(uid, i['name'] + ('\nСегодня нет' if is_unavailable(i) else '') + '\n' + details + '\n' + '\n'.join(i['notes']), [
             ('₽ Изменить цены', ('input', 'prices', sid, gid, iid)),
             ('✎ Переименовать', ('input', 'item-name', sid, gid, iid)),
             ('✎ Описание', ('input', 'notes', sid, gid, iid)),
             ('🖼 Картинка', ('image', sid, gid, iid)),
+            ('✓ Снова в наличии' if is_unavailable(i) else 'Сегодня нет', ('availability', sid, gid, iid)),
             ('Удалить позицию', ('delete-item', sid, gid, iid)),
             ('← Позиции', ('group', sid, gid))])
 
@@ -683,15 +688,44 @@ class Bot:
     def show_preview(self, uid):
         state = self.sessions[uid]
         _, description = state['draft']
-        buttons = [('✓ Сохранить', ('save',))]
+        buttons = [('👁 Предпросмотр меню', ('menu-preview',)), ('✓ Сохранить', ('save',))]
         if state.get('generated'):
             buttons += [('🖼 Показать картинку', ('generation-preview',)),
                         ('↻ Ещё вариант', ('generation-again',))]
         if state.get('bulk_changes'):
             buttons.insert(0, ('📋 Все изменения', ('bulk-preview', 0)))
         buttons.append(('Отмена', ('home',)))
-        self.send(uid, description + '\n\nСохранить и опубликовать? Предыдущая версия останется в истории.',
+        self.send(uid, description + '\n\nПредпросмотр меню — файл для открытия в браузере.\nСохранить и опубликовать? Предыдущая версия останется в истории.',
                   buttons)
+
+    def menu_preview(self, uid):
+        state = self.sessions[uid]
+        if 'draft' not in state:
+            raise ValueError('Черновик устарел. Откройте изменение заново.')
+        content = preview_document(state['draft'][0], state.get('draft_assets'))
+        self.show_preview(uid)
+        boundary = secrets.token_hex(16)
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{uid}\r\n'
+                f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="menu-preview.html"\r\n'
+                'Content-Type: text/html; charset=utf-8\r\n\r\n').encode()
+        body += content + f'\r\n--{boundary}--\r\n'.encode()
+        result = self.telegram_request('sendDocument', body, f'multipart/form-data; boundary={boundary}')
+        self.documents.setdefault(uid, []).append(result['message_id'])
+
+    def season_show(self, uid, fresh=False):
+        state = self.sessions[uid]
+        if fresh or 'season_draft' not in state:
+            git('fetch', 'origin', 'main')
+            git('merge', '--ff-only', 'FETCH_HEAD')
+            state['season_base'] = season.load()
+            state['season_draft'] = copy.deepcopy(state['season_base'])
+        config = state['season_draft']
+        self.send(uid, 'Сезонное оформление: ' + ('включено' if config['halloween'] else 'выключено')
+                  + '\nПоследний день: ' + (config.get('until') or 'без ограничения')
+                  + '\nСрок включительно, время Нижневартовска. Истёкшая дата отключает украшения.'
+                  + '\nИзменения применяются после сохранения.',
+                  [('Включить / выключить', ('season-toggle',)), ('📅 Последний день', ('season-date',)),
+                   ('✓ Сохранить оформление', ('season-save',)), ('Отмена', ('home',))])
 
     def cancel_generation(self, uid):
         job = self.generations.get(uid)
@@ -912,6 +946,13 @@ class Bot:
     def input(self, uid, raw):
         state = self.sessions[uid]
         kind, ids = state['input']
+        if kind == 'season-date':
+            config = copy.deepcopy(state['season_draft'])
+            config['until'] = '' if raw.strip() == '-' else raw.strip()
+            season.validate(config)
+            state['season_draft'] = config
+            state.pop('input', None)
+            return self.season_show(uid)
         if kind == 'carousel-description':
             if not isinstance(raw, str) or not raw.strip() or len(raw) > 1000:
                 raise ValueError('Описание — от 1 до 1000 символов; «-» убирает описание.')
@@ -972,6 +1013,34 @@ class Bot:
             return self.carousel_action(uid, op, args, update_id)
         if op == 'site' or op.startswith('site-'):
             return self.site_action(uid, op, args, update_id)
+        if op == 'menu-preview': return self.menu_preview(uid)
+        if op == 'season': return self.season_show(uid, fresh=True)
+        if op == 'season-toggle':
+            state = self.sessions[uid]
+            state['season_draft']['halloween'] = not state['season_draft']['halloween']
+            return self.season_show(uid)
+        if op == 'season-date':
+            self.sessions[uid]['input'] = ('season-date', ())
+            return self.send(uid, 'Введите последний день в формате ГГГГ-ММ-ДД. Например: 2026-10-31. «-» снимает срок.', [('← Оформление', ('season-back',))])
+        if op == 'season-back':
+            self.sessions[uid].pop('input', None)
+            return self.season_show(uid)
+        if op == 'season-save':
+            state = self.sessions[uid]
+            changed = season.publish(state['season_draft'], state['season_base'], update_id, git)
+            state['season_base'] = copy.deepcopy(state['season_draft'])
+            if changed: dispatch()
+            return self.send(uid, 'Настройки сохранены.' + (' Публикация запущена.' if changed else ''), [('← Меню', ('home',))])
+        if op == 'undo-menu':
+            git('fetch', 'origin', 'main')
+            versions = git('log', 'FETCH_HEAD', '--format=%H', '-n', '2', '--', 'data/menu.json').splitlines()
+            if len(versions) < 2:
+                return self.send(uid, 'Предыдущей версии меню пока нет.', [('← Меню', ('home',))])
+            current = validate(json.loads(git('show', 'FETCH_HEAD:data/menu.json')))
+            if fingerprint(current) != self.sessions[uid]['base']:
+                raise ValueError('Меню уже изменилось. Откройте /start и повторите отмену.')
+            menu = validate(json.loads(git('show', f'{versions[1]}:data/menu.json')))
+            return self.preview(uid, menu, 'Отмена последней правки меню. Восстановится версия ' + versions[1][:8] + '. Проверьте предпросмотр перед сохранением.')
         if op == 'section': return self.section(uid, *args)
         if op == 'group': return self.group(uid, *args)
         if op == 'item': return self.item(uid, *args)
@@ -1072,6 +1141,10 @@ class Bot:
         elif op == 'delete-section':
             menu['sections'].remove(s)
             description = 'Удаление раздела со всеми позициями: ' + s['name']
+        elif op == 'availability':
+            if is_unavailable(i): i.pop('unavailable_on', None)
+            else: i['unavailable_on'] = local_day().isoformat()
+            description = ('Сегодня нет: ' if is_unavailable(i) else 'Снова в наличии: ') + i['name']
         elif op == 'delete-item':
             g['items'].remove(i)
             description = 'Удаление позиции: ' + i['name']

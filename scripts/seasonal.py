@@ -1,18 +1,5 @@
 """Small seasonal decorations, independent of menu and carousel selections."""
-import json
-from pathlib import Path
-
-CONFIG_PATH = Path('config/seasonal.json')
-
-
-def enabled():
-    try:
-        config = json.loads(CONFIG_PATH.read_text())
-    except FileNotFoundError:
-        return False
-    if not isinstance(config, dict) or type(config.get('halloween')) is not bool:
-        raise ValueError('config/seasonal.json: halloween должен быть true или false.')
-    return config['halloween']
+from bot.season import enabled
 
 
 def image_for(entry, image):

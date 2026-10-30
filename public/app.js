@@ -4,6 +4,10 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let pageDialogOpen = false;
 let itemNavigationCategory = null;
 for (const category of categories) {
+  const heading = category.querySelector('summary');
+  new ResizeObserver(() => {
+    category.style.setProperty('--section-heading-height', `${heading.offsetHeight}px`);
+  }).observe(heading);
   category.addEventListener('toggle', () => {
     if (!category.open) return;
     for (const other of categories) {
@@ -40,7 +44,7 @@ const revealMenuItem = hash => {
   document.querySelectorAll('.is-highlighted').forEach(row => row.classList.remove('is-highlighted'));
   requestAnimationFrame(() => requestAnimationFrame(() => {
     item.focus({ preventScroll: true });
-    item.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'center' });
+    item.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'start' });
     item.classList.add('is-highlighted');
     highlightTimer = setTimeout(() => item.classList.remove('is-highlighted'), 3000);
   }));
@@ -309,3 +313,23 @@ for (const trigger of document.querySelectorAll('[data-open-dialog]')) {
   });
   if (location.hash === `#${dialog.id}`) open();
 }
+
+// Daily availability uses the cafe's local date, including pages left open overnight.
+const cafeDay = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Yekaterinburg', year:'numeric',month:'2-digit',day:'2-digit' }).format(new Date());
+const refreshDailyState = () => {
+  document.querySelectorAll('[data-unavailable-on]').forEach(row => {
+    row.querySelector('.availability-label').hidden = row.dataset.unavailableOn !== cafeDay();
+  });
+  const until = document.documentElement.dataset.seasonUntil;
+  if (until && cafeDay() > until) {
+    document.documentElement.removeAttribute('data-season');
+    document.querySelectorAll('img[src*="pumpkin-raf-blinking.svg"]').forEach(img => {
+      const picture = img.closest('picture');
+      if (picture) picture.querySelectorAll('source').forEach(source => source.remove());
+      img.src = './assets/menu-images/7f4d43cf8f71d72389e7879ec507a2b73c2d2d13cb256ce971d76df2ab45d72e.webp';
+    });
+  }
+};
+refreshDailyState();
+setInterval(refreshDailyState, 60000);
+document.addEventListener('visibilitychange', refreshDailyState);
