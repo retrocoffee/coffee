@@ -35,7 +35,10 @@
               "prices": [
                 "280 ₽"
               ],
-              "image": "./assets/menu-images/fb66873c14567119879546aafc7f237f22b83d1ae1ed294d5ccb24d9ebe57f4e.webp"
+              "image": "./assets/menu-images/fb66873c14567119879546aafc7f237f22b83d1ae1ed294d5ccb24d9ebe57f4e.webp",
+              "labels": [
+                "hit"
+              ]
             },
             {
               "id": "i3",
