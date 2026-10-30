@@ -6,6 +6,7 @@ import re
 from html import escape
 from pathlib import Path
 from bot.images import menu_image, valid_image_path
+from bot.responsive import attributes as responsive_attributes
 
 def local_day():
     return datetime.now(ZoneInfo('Asia/Yekaterinburg')).date()
@@ -133,7 +134,7 @@ def render(menu):
                 image = escape(menu_image(section, group, item), quote=True)
                 badge = '<span class="availability-label"' + ('' if is_unavailable(item) else ' hidden') + '>Сегодня нет</span>'
                 day = escape(item.get('unavailable_on', ''), quote=True)
-                out.append(f'<tr id="{item_anchor(section, group, item)}" tabindex="-1" data-unavailable-on="{day}"><th scope="row"><div class="menu-item"><img class="menu-item-image" src="{image}" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">{escape(item["name"])}{render_labels(item)}{badge}{notes}</div></div></th><td class="menu-prices">' + ''.join(variants) + '</td></tr>')
+                out.append(f'<tr id="{item_anchor(section, group, item)}" tabindex="-1" data-unavailable-on="{day}"><th scope="row"><div class="menu-item"><img class="menu-item-image" src="{image}"{responsive_attributes(image, "32px")} alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">{escape(item["name"])}{render_labels(item)}{badge}{notes}</div></div></th><td class="menu-prices">' + ''.join(variants) + '</td></tr>')
             out.append('</tbody></table>')
         out.append('</div></details>')
     return '\n'.join(out)

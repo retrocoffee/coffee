@@ -11,3 +11,13 @@ const menu = JSON.parse(readFileSync('data/menu.json', 'utf8'));
 assert.equal((html.match(/class="menu-category"/g) || []).length, menu.sections.filter(section => !section.hidden).length);
 assert(!html.includes('coffee-bean'));
 console.log('Menu categories and local assets verified.');
+
+for (const match of html.matchAll(/srcset="([^"]+)"/g)) {
+  for (const candidate of match[1].split(',')) {
+    const path = candidate.trim().split(/\s+/)[0];
+    assert(path.startsWith('./') && existsSync(`public/${path.slice(2)}`), `Missing responsive asset: ${path}`);
+  }
+}
+assert(html.includes('http-equiv="Content-Security-Policy"'));
+assert(html.includes("script-src 'self'"));
+assert(html.includes('name="referrer" content="no-referrer"'));

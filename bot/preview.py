@@ -15,6 +15,7 @@ def document(menu, assets=None):
     css = Path('public/style.css').read_text()
     css = re.sub(r"url\('\./([^']+)'\)", lambda m: "url('" + uri(m[1].split('?')[0]) + "')", css)
     html = render(menu)
+    html = re.sub(r' (?:srcset|sizes)="[^"]*"', '', html)
     html = re.sub(r'src="\./([^"]+)"', lambda m: 'src="' + uri(m[1]) + '"', html)
     return ('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
             '<title>Предпросмотр меню</title><style>' + css + '</style><body><main class="menu">' + html + '</main></body></html>').encode()

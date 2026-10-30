@@ -5,6 +5,7 @@ from pathlib import Path
 from bot import carousel as selection
 from bot.menu import item_anchor, is_unavailable, render_labels
 from scripts import seasonal
+from bot.responsive import attributes as responsive_attributes
 
 
 def render_carousel(menu):
@@ -33,7 +34,7 @@ def render_carousel(menu):
         image = seasonal.image_for(entry, image)
         if not selection.valid_image(image) or not Path('public', image[2:]).is_file():
             raise ValueError('Invalid carousel image: ' + image)
-        picture = f'<img class="product-image" src="{escape(image)}" alt="{escape(item["name"])}" width="460" height="420" decoding="async">'
+        picture = f'<img class="product-image" src="{escape(image)}"{responsive_attributes(image, "(max-width: 600px) 25vw, 186px")} alt="{escape(item["name"])}" width="460" height="420" decoding="async">'
         if image == './assets/products/pumpkin-raf-blinking.svg':
             picture = '<picture class="product-art"><source media="(prefers-reduced-motion: reduce)" srcset="./assets/products/pumpkin-raf-face-static.svg">' + picture + '</picture>'
         cards.append(f'''<article class="product-card">

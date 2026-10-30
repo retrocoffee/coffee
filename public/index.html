@@ -2,6 +2,9 @@
 <html lang="ru" data-season="halloween">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="preload" href="./assets/sans.woff2" as="font" type="font/woff2" crossorigin>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#ffffff">
 <meta name="description" content="Меню кофейни РЕТРОКОФЕ: кофе, чай, сезонные и холодные напитки. Объёмы и цены.">
@@ -22,7 +25,7 @@
 <section class="product-carousel" aria-label="Напитки" aria-roledescription="карусель">
 <div class="carousel-window" aria-label="Листать напитки стрелками или свайпом">
 <div class="carousel-track"><article class="product-card">
-<img class="product-image" src="./assets/menu-images/e19eddb9e41ea754d86c6c3779c4a806bd942f90fe635f309d7c5a5b8edec42a.webp" alt="Глинтвейн безалкогольный" width="460" height="420" decoding="async">
+<img class="product-image" src="./assets/menu-images/e19eddb9e41ea754d86c6c3779c4a806bd942f90fe635f309d7c5a5b8edec42a.webp" srcset="./assets/resized/bbcade9e85eee18abc97806538ff3dc94cb21765faa636f8c6a0a2941f53de3d.webp 95w, ./assets/resized/0b6cc08c00974d1e507b88084970bc8d22e37dc9b1c1c6b03e9b44dcd1fbbca3.webp 316w" sizes="(max-width: 600px) 25vw, 186px" alt="Глинтвейн безалкогольный" width="460" height="420" decoding="async">
 <div class="product-copy">
 <h3 class="product-name"><a class="product-link" href="#menu-item-seasonal.g1.i1" aria-label="Глинтвейн безалкогольный — посмотреть в меню">Глинтвейн безалкогольный</a></h3>
 
@@ -30,10 +33,10 @@
 <p class="product-meta"><span class="product-volume">300 мл</span><span class="product-price">300 ₽</span></p>
 </div>
 </article><article class="product-card">
-<img class="product-image" src="./assets/menu-images/fb66873c14567119879546aafc7f237f22b83d1ae1ed294d5ccb24d9ebe57f4e.webp" alt="Сбитень" width="460" height="420" decoding="async">
+<img class="product-image" src="./assets/menu-images/fb66873c14567119879546aafc7f237f22b83d1ae1ed294d5ccb24d9ebe57f4e.webp" srcset="./assets/resized/98a960bb314c35467c8243627aeaabb36b93154097b4e132f6eae6fe67a7f025.webp 94w, ./assets/resized/0b1aa0145e32f46e12af61036913c59b9e80de6ba08b90684616d7b4716a6247.webp 314w" sizes="(max-width: 600px) 25vw, 186px" alt="Сбитень" width="460" height="420" decoding="async">
 <div class="product-copy">
 <h3 class="product-name"><a class="product-link" href="#menu-item-seasonal.g1.i2" aria-label="Сбитень — посмотреть в меню">Сбитень</a></h3>
-
+<span class="item-labels"><span class="item-label">Хит</span></span>
 <p class="product-description">мёд, облепиха, базилик, душица, мята, корица, имбирь, кориандр, гвоздика, зверобой, корень аира, кардамон, мускатный орех, корень солодки, апельсин</p>
 <p class="product-meta"><span class="product-volume">300 мл</span><span class="product-price">280 ₽</span></p>
 </div>
@@ -46,7 +49,7 @@
 <p class="product-meta"><span class="product-volume">300 мл</span><span class="product-price">280 ₽</span></p>
 </div>
 </article><article class="product-card">
-<img class="product-image" src="./assets/menu-images/2996dd9e2c41537ed468cce4fc13ed44453446710700ac6f77947190f2bf5319.webp" alt="Имбирный какао с зефирками" width="460" height="420" decoding="async">
+<img class="product-image" src="./assets/menu-images/2996dd9e2c41537ed468cce4fc13ed44453446710700ac6f77947190f2bf5319.webp" srcset="./assets/resized/a77264ff0a802a644175c56b6175e62f66aec3e598361a88f5204ff6e503c058.webp 96w, ./assets/resized/cd1e8db51c645c5d30fa00562a2ec879413f0d0760e0c53e28b20ed58c2f7216.webp 320w" sizes="(max-width: 600px) 25vw, 186px" alt="Имбирный какао с зефирками" width="460" height="420" decoding="async">
 <div class="product-copy">
 <h3 class="product-name"><a class="product-link" href="#menu-item-seasonal.g1.i4" aria-label="Имбирный какао с зефирками — посмотреть в меню">Имбирный какао с зефирками</a></h3>
 
@@ -54,7 +57,7 @@
 <p class="product-meta"><span class="product-volume">300 мл</span><span class="product-price">290 ₽</span></p>
 </div>
 </article><article class="product-card">
-<img class="product-image" src="./assets/products/oreo-milkshake.webp" alt="Молочный коктейль «Орео»" width="460" height="420" decoding="async">
+<img class="product-image" src="./assets/products/oreo-milkshake.webp" srcset="./assets/resized/6839b1c4a4c33f93b57279c3036bd9ed0682e91b1b619d4abff151b0549726ee.webp 95w, ./assets/resized/5c9a78d0b3af2c48ec890d62be9ac654a4d2d843daee059fe3a91052b2b1da23.webp 315w" sizes="(max-width: 600px) 25vw, 186px" alt="Молочный коктейль «Орео»" width="460" height="420" decoding="async">
 <div class="product-copy">
 <h3 class="product-name"><a class="product-link" href="#menu-item-iced-milk.g1.i6" aria-label="Молочный коктейль «Орео» — посмотреть в меню">Молочный коктейль «Орео»</a></h3>
 
@@ -74,10 +77,10 @@
 <div class="category-content">
 <table class="price-table drinks"><caption class="visually-hidden">Сезонное меню</caption>
 <tbody>
-<tr id="menu-item-seasonal.g1.i1" tabindex="-1" data-unavailable-on=""><th scope="row"><div class="menu-item"><img class="menu-item-image" src="./assets/menu-images/e19eddb9e41ea754d86c6c3779c4a806bd942f90fe635f309d7c5a5b8edec42a.webp" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">Глинтвейн безалкогольный<span class="availability-label" hidden>Сегодня нет</span><span class="item-note">насыщенный вкус клюквы, корицы, гвоздики и апельсина</span></div></div></th><td class="menu-prices"><span class="menu-variant"><span class="menu-volume">300 мл</span><span>300 ₽</span></span></td></tr>
-<tr id="menu-item-seasonal.g1.i2" tabindex="-1" data-unavailable-on=""><th scope="row"><div class="menu-item"><img class="menu-item-image" src="./assets/menu-images/fb66873c14567119879546aafc7f237f22b83d1ae1ed294d5ccb24d9ebe57f4e.webp" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">Сбитень<span class="availability-label" hidden>Сегодня нет</span><details class="item-description"><summary>Состав и описание</summary><span class="item-note">мёд, облепиха, базилик, душица, мята, корица, имбирь, кориандр, гвоздика, зверобой, корень аира, кардамон, мускатный орех, корень солодки, апельсин</span></details></div></div></th><td class="menu-prices"><span class="menu-variant"><span class="menu-volume">300 мл</span><span>280 ₽</span></span></td></tr>
-<tr id="menu-item-seasonal.g1.i3" tabindex="-1" data-unavailable-on=""><th scope="row"><div class="menu-item"><img class="menu-item-image" src="./assets/menu-images/7f4d43cf8f71d72389e7879ec507a2b73c2d2d13cb256ce971d76df2ab45d72e.webp" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">Раф пряная тыква<span class="availability-label" hidden>Сегодня нет</span></div></div></th><td class="menu-prices"><span class="menu-variant"><span class="menu-volume">300 мл</span><span>280 ₽</span></span></td></tr>
-<tr id="menu-item-seasonal.g1.i4" tabindex="-1" data-unavailable-on=""><th scope="row"><div class="menu-item"><img class="menu-item-image" src="./assets/menu-images/2996dd9e2c41537ed468cce4fc13ed44453446710700ac6f77947190f2bf5319.webp" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">Имбирный какао с зефирками<span class="availability-label" hidden>Сегодня нет</span></div></div></th><td class="menu-prices"><span class="menu-variant"><span class="menu-volume">300 мл</span><span>290 ₽</span></span></td></tr>
+<tr id="menu-item-seasonal.g1.i1" tabindex="-1" data-unavailable-on=""><th scope="row"><div class="menu-item"><img class="menu-item-image" src="./assets/menu-images/e19eddb9e41ea754d86c6c3779c4a806bd942f90fe635f309d7c5a5b8edec42a.webp" srcset="./assets/resized/bbcade9e85eee18abc97806538ff3dc94cb21765faa636f8c6a0a2941f53de3d.webp 95w, ./assets/resized/0b6cc08c00974d1e507b88084970bc8d22e37dc9b1c1c6b03e9b44dcd1fbbca3.webp 316w" sizes="32px" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">Глинтвейн безалкогольный<span class="availability-label" hidden>Сегодня нет</span><span class="item-note">насыщенный вкус клюквы, корицы, гвоздики и апельсина</span></div></div></th><td class="menu-prices"><span class="menu-variant"><span class="menu-volume">300 мл</span><span>300 ₽</span></span></td></tr>
+<tr id="menu-item-seasonal.g1.i2" tabindex="-1" data-unavailable-on=""><th scope="row"><div class="menu-item"><img class="menu-item-image" src="./assets/menu-images/fb66873c14567119879546aafc7f237f22b83d1ae1ed294d5ccb24d9ebe57f4e.webp" srcset="./assets/resized/98a960bb314c35467c8243627aeaabb36b93154097b4e132f6eae6fe67a7f025.webp 94w, ./assets/resized/0b1aa0145e32f46e12af61036913c59b9e80de6ba08b90684616d7b4716a6247.webp 314w" sizes="32px" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">Сбитень<span class="item-labels"><span class="item-label">Хит</span></span><span class="availability-label" hidden>Сегодня нет</span><details class="item-description"><summary>Состав и описание</summary><span class="item-note">мёд, облепиха, базилик, душица, мята, корица, имбирь, кориандр, гвоздика, зверобой, корень аира, кардамон, мускатный орех, корень солодки, апельсин</span></details></div></div></th><td class="menu-prices"><span class="menu-variant"><span class="menu-volume">300 мл</span><span>280 ₽</span></span></td></tr>
+<tr id="menu-item-seasonal.g1.i3" tabindex="-1" data-unavailable-on=""><th scope="row"><div class="menu-item"><img class="menu-item-image" src="./assets/menu-images/7f4d43cf8f71d72389e7879ec507a2b73c2d2d13cb256ce971d76df2ab45d72e.webp" srcset="./assets/resized/fe22031cb9f2bc17c88cacb4666694c74c18fe5a2b67717c8d205982b7df2b58.webp 96w, ./assets/resized/b99aadfe523af630bd509ea297cdb863022382f81ed84fb49d548bde1d225d08.webp 320w" sizes="32px" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">Раф пряная тыква<span class="availability-label" hidden>Сегодня нет</span></div></div></th><td class="menu-prices"><span class="menu-variant"><span class="menu-volume">300 мл</span><span>280 ₽</span></span></td></tr>
+<tr id="menu-item-seasonal.g1.i4" tabindex="-1" data-unavailable-on=""><th scope="row"><div class="menu-item"><img class="menu-item-image" src="./assets/menu-images/2996dd9e2c41537ed468cce4fc13ed44453446710700ac6f77947190f2bf5319.webp" srcset="./assets/resized/a77264ff0a802a644175c56b6175e62f66aec3e598361a88f5204ff6e503c058.webp 96w, ./assets/resized/cd1e8db51c645c5d30fa00562a2ec879413f0d0760e0c53e28b20ed58c2f7216.webp 320w" sizes="32px" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">Имбирный какао с зефирками<span class="availability-label" hidden>Сегодня нет</span></div></div></th><td class="menu-prices"><span class="menu-variant"><span class="menu-volume">300 мл</span><span>290 ₽</span></span></td></tr>
 </tbody></table>
 </div></details>
 <details class="menu-category" name="coffee-menu" id="coffee">
