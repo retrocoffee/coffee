@@ -74,6 +74,11 @@ def prices(raw, count):
     return result
 
 
+def item_anchor(section, group, item):
+    """Stable across renaming; dots cannot occur in menu IDs."""
+    return f'menu-item-{section["id"]}.{group["id"]}.{item["id"]}'
+
+
 def render(menu):
     validate(menu)
     out = []
@@ -93,7 +98,7 @@ def render(menu):
             for item in group['items']:
                 notes = ''.join(f'<span class="item-note">{escape(note)}</span>' for note in item['notes'])
                 image = escape(menu_image(section, group, item), quote=True)
-                out.append(f'<tr><th scope="row"><span class="menu-item"><img class="menu-item-image" src="{image}" alt="" width="38" height="42" loading="lazy" decoding="async"><span class="menu-item-copy">{escape(item["name"])}{notes}</span></span></th>' + ''.join(f'<td>{escape(price)}</td>' for price in item['prices']) + '</tr>')
+                out.append(f'<tr id="{item_anchor(section, group, item)}" tabindex="-1"><th scope="row"><span class="menu-item"><img class="menu-item-image" src="{image}" alt="" width="38" height="42" loading="lazy" decoding="async"><span class="menu-item-copy">{escape(item["name"])}{notes}</span></span></th>' + ''.join(f'<td>{escape(price)}</td>' for price in item['prices']) + '</tr>')
             out.append('</tbody></table>')
         out.append('</div></details>')
     return '\n'.join(out)

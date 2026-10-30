@@ -2,6 +2,7 @@ import copy
 import io
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 from bot import carousel
 from bot.images import prepare_image
-from bot.menu import encode as menu_encode
+from bot.menu import encode as menu_encode, render as render_menu
 from bot.telegram_bot import Bot, fingerprint, git
 from scripts.carousel import render_carousel
 from support import sample_menu
@@ -185,6 +186,15 @@ class CarouselPersistenceTests(unittest.TestCase):
         self.assertEqual(carousel.load(), self.original)
         self.assertFalse(Path('public', image[2:]).exists())
         self.assertEqual(git('status', '--porcelain'), '')
+
+    def test_card_links_resolve_to_menu_rows_and_survive_renaming(self):
+        links = re.findall(r'class="product-link" href="#([^"]+)"', render_carousel(self.menu))
+        self.assertEqual(len(links), len(self.original))
+        self.assertEqual(len(links), len(set(links)))
+        for target in links:
+            self.assertEqual(render_menu(self.menu).count(f'id="{target}"'), 1)
+        self.menu['sections'][0]['groups'][0]['items'][0]['name'] = 'Новое название'
+        self.assertEqual(links, re.findall(r'class="product-link" href="#([^"]+)"', render_carousel(self.menu)))
 
     def test_empty_selection_hides_carousel(self):
         carousel.PATH.write_text('[]')

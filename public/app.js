@@ -2,6 +2,7 @@
 const categories = [...document.querySelectorAll('.menu-category')];
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let pageDialogOpen = false;
+let itemNavigationCategory = null;
 for (const category of categories) {
   category.addEventListener('toggle', () => {
     if (!category.open) return;
@@ -9,6 +10,10 @@ for (const category of categories) {
       if (other !== category) other.open = false;
     }
 
+    if (itemNavigationCategory === category) {
+      itemNavigationCategory = null;
+      return;
+    }
     // After the browser lays out the expanded category, bring its heading to the top.
     requestAnimationFrame(() => {
       if (!category.open) return;
@@ -19,6 +24,29 @@ for (const category of categories) {
     });
   });
 }
+
+// Open the exact menu entry, including direct links and browser history.
+let highlightTimer;
+const revealMenuItem = hash => {
+  const item = document.getElementById(hash.slice(1));
+  if (!item || !item.matches('.price-table tr[id]')) return;
+  const category = item.closest('.menu-category');
+  if (!category.open) {
+    itemNavigationCategory = category;
+    category.open = true;
+  }
+  for (const other of categories) if (other !== category) other.open = false;
+  clearTimeout(highlightTimer);
+  document.querySelectorAll('.is-highlighted').forEach(row => row.classList.remove('is-highlighted'));
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    item.focus({ preventScroll: true });
+    item.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'center' });
+    item.classList.add('is-highlighted');
+    highlightTimer = setTimeout(() => item.classList.remove('is-highlighted'), 3000);
+  }));
+};
+window.addEventListener('hashchange', () => revealMenuItem(location.hash));
+revealMenuItem(location.hash);
 
 // One centered card at a time, with the current menu rendered by the build step.
 const carousel = document.querySelector('.product-carousel');
@@ -55,6 +83,7 @@ if (carousel) {
   let cardAnchor = 0;
   let motion = null;
   let drag = null;
+  let suppressClickUntil = 0;
   let paused = reduceMotion.matches || count < 2;
   let manuallyBrowsed = false;
   let manualIdleElapsed = null;
@@ -62,7 +91,7 @@ if (carousel) {
   let hovered = false;
   let focused = false;
   let visible = true;
-  const autoplayInterval = 2000;
+  const autoplayInterval = 6000;
   const transitionDuration = 800;
   let autoplayElapsed = 0;
   let lastTime = null;
@@ -76,6 +105,8 @@ if (carousel) {
     track.style.transform = `translate3d(${viewport.clientWidth / 2 - cardAnchor - offset}px,0,0)`;
     cards.forEach((card, index) => {
       const distance = Math.abs(index * step - offset) / step;
+      const link = card.querySelector('.product-link');
+      if (link) link.tabIndex = distance < .5 && !card.inert ? 0 : -1;
       card.style.opacity = Math.max(.18, 1 - distance * .32).toFixed(3);
       card.style.transform = `scale(${(.9 + .1 * Math.max(0, 1 - distance)).toFixed(3)})`;
     });
@@ -132,15 +163,19 @@ if (carousel) {
     if (manuallyBrowsed) manualIdleElapsed = 0;
     drag = { id: event.pointerId, x: event.clientX, from: offset, distance: 0 };
     autoplayElapsed = 0;
-    viewport.setPointerCapture(event.pointerId);
   });
   viewport.addEventListener('pointermove', event => {
     if (!drag || drag.id !== event.pointerId) return;
     drag.distance = Math.max(-step, Math.min(step, event.clientX - drag.x));
+    if (Math.abs(drag.distance) > 8 && !viewport.hasPointerCapture(event.pointerId)) {
+      viewport.setPointerCapture(event.pointerId);
+    }
     offset = drag.from - drag.distance;
     draw();
   });
   const finishDrag = event => {
+    // Touch starts with implicit capture on the link; ignore its handoff to the viewport.
+    if (event.type === 'lostpointercapture' && event.target !== viewport) return;
     if (!drag || drag.id !== event.pointerId) return;
     const cancelled = event.type !== 'pointerup';
     const direction = !cancelled && Math.abs(drag.distance) >= Math.min(48, step * .15)
@@ -150,10 +185,24 @@ if (carousel) {
       manuallyBrowsed = true;
       manualIdleElapsed = 0;
     }
+    if (cancelled || Math.abs(drag.distance) > 8) suppressClickUntil = performance.now() + 400;
     drag = null;
     if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
     moveTo(target);
   };
+  viewport.addEventListener('click', event => {
+    const link = event.target.closest('.product-link');
+    if (!link) return;
+    if (performance.now() < suppressClickUntil) {
+      event.preventDefault();
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    const hash = link.getAttribute('href');
+    if (location.hash !== hash) history.pushState(null, '', hash);
+    revealMenuItem(hash);
+  });
   viewport.addEventListener('pointerup', finishDrag);
   viewport.addEventListener('pointercancel', finishDrag);
   viewport.addEventListener('lostpointercapture', finishDrag);
@@ -187,7 +236,7 @@ if (carousel) {
         }
       }
       const canAutoplay = !paused && !drag && (manuallyBrowsed || (!hovered && !focused));
-      if (canAutoplay && manualIdleElapsed === null) autoplayElapsed += delta;
+      if (canAutoplay && manualIdleElapsed === null && !motion) autoplayElapsed += delta;
       else autoplayElapsed = 0;
       if (motion) {
         motion.elapsed += delta;

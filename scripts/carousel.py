@@ -3,6 +3,7 @@ import re
 from html import escape
 from pathlib import Path
 from bot import carousel as selection
+from bot.menu import item_anchor
 from scripts import seasonal
 
 
@@ -38,7 +39,7 @@ def render_carousel(menu):
         cards.append(f'''<article class="product-card">
 {picture}
 <div class="product-copy">
-<h2 class="product-name">{escape(item['name'])}</h2>
+<h3 class="product-name"><a class="product-link" href="#{item_anchor(section, group, item)}" aria-label="{escape(item['name'])} — посмотреть в меню">{escape(item['name'])}</a></h3>
 <p class="product-description">{escape(description)}</p>
 <p class="product-meta"><span class="product-volume">{escape(volume)}</span><span class="product-price">{escape(item['prices'][variant])}</span></p>
 </div>
@@ -46,7 +47,8 @@ def render_carousel(menu):
     if not cards:
         return ''
     arrow = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"><path d="m14 5-7 7 7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-    return f'''<section class="product-carousel" aria-label="Напитки" aria-roledescription="карусель">
+    return f'''<section class="product-carousel" aria-labelledby="featured-heading" aria-roledescription="карусель">
+<h2 class="carousel-heading" id="featured-heading">Попробуйте</h2>
 <div class="carousel-window" aria-label="Листать напитки стрелками или свайпом">
 <div class="carousel-track">{''.join(cards)}</div>
 </div>
