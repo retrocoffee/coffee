@@ -47,8 +47,7 @@ def render_carousel(menu):
     if not cards:
         return ''
     arrow = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true"><path d="m14 5-7 7 7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-    return f'''<section class="product-carousel" aria-labelledby="featured-heading" aria-roledescription="карусель">
-<h2 class="carousel-heading" id="featured-heading">Попробуйте</h2>
+    return f'''<section class="product-carousel" aria-label="Напитки" aria-roledescription="карусель">
 <div class="carousel-window" aria-label="Листать напитки стрелками или свайпом">
 <div class="carousel-track">{''.join(cards)}</div>
 </div>
