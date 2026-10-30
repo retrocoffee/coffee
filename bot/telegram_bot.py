@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from bot.bulk import MAX_BYTES, apply_csv, export_csv
-from bot.menu import MENU_PATH, encode, load, prices, validate, local_day, is_unavailable
+from bot.menu import MENU_PATH, encode, load, prices, validate, local_day, is_unavailable, LABELS
 from bot.images import MAX_IMAGE_BYTES, prepare_image, valid_image_path
 from bot.generation import SETUP_MESSAGE, available, description_text, generate_image
 from bot import site as cafe
@@ -645,14 +645,27 @@ class Bot:
     def item(self, uid, sid, gid, iid):
         _, g, i = self.find(uid, sid, gid, iid)
         details = '\n'.join(f'{c}: {p}' for c,p in zip(g['columns'] or ['Цена'], i['prices']))
-        self.send(uid, i['name'] + ('\nСегодня нет' if is_unavailable(i) else '') + '\n' + details + '\n' + '\n'.join(i['notes']), [
+        labels = ', '.join(LABELS[key] for key in LABELS if key in i.get('labels', [])) or 'нет'
+        self.send(uid, i['name'] + '\nМетки: ' + labels + ('\nСегодня нет' if is_unavailable(i) else '') + '\n' + details + '\n' + '\n'.join(i['notes']), [
             ('₽ Изменить цены', ('input', 'prices', sid, gid, iid)),
             ('✎ Переименовать', ('input', 'item-name', sid, gid, iid)),
             ('✎ Описание', ('input', 'notes', sid, gid, iid)),
+            ('🏷 Метки', ('labels', sid, gid, iid)),
             ('🖼 Картинка', ('image', sid, gid, iid)),
             ('✓ Снова в наличии' if is_unavailable(i) else 'Сегодня нет', ('availability', sid, gid, iid)),
             ('Удалить позицию', ('delete-item', sid, gid, iid)),
             ('← Позиции', ('group', sid, gid))])
+
+    def labels_show(self, uid):
+        state = self.sessions[uid]
+        menu, ids = state['labels_draft']
+        _, _, item = self.find(uid, *ids, menu=menu)
+        labels = item.get('labels', [])
+        buttons = [(('✓ ' if key in labels else '＋ ') + name, ('label-toggle', key))
+                   for key, name in LABELS.items()]
+        buttons += [('Далее → Предпросмотр', ('labels-confirm',)), ('Отмена', ('item', *ids))]
+        self.send(uid, item['name'] + '\n\nМетки: ' + (', '.join(LABELS[key] for key in LABELS if key in labels) or 'нет')
+                  + '\nНажмите метку, чтобы включить или снять. Можно выбрать обе. На сайте они появятся после сохранения.', buttons)
 
     def find(self, uid, sid, gid=None, iid=None, menu=None):
         m = menu if menu is not None else self.sessions[uid]['menu']
@@ -1044,6 +1057,24 @@ class Bot:
         if op == 'section': return self.section(uid, *args)
         if op == 'group': return self.group(uid, *args)
         if op == 'item': return self.item(uid, *args)
+        if op == 'labels':
+            self.sessions[uid]['labels_draft'] = (copy.deepcopy(self.sessions[uid]['menu']), tuple(args))
+            return self.labels_show(uid)
+        if op == 'label-toggle':
+            key = args[0]
+            if key not in LABELS: raise ValueError('Неизвестная метка.')
+            menu, ids = self.sessions[uid]['labels_draft']
+            _, _, item = self.find(uid, *ids, menu=menu)
+            labels = item.setdefault('labels', [])
+            if key in labels: labels.remove(key)
+            else: labels.append(key)
+            if not labels: item.pop('labels', None)
+            return self.labels_show(uid)
+        if op == 'labels-confirm':
+            menu, ids = self.sessions[uid]['labels_draft']
+            _, _, item = self.find(uid, *ids, menu=menu)
+            labels = ', '.join(LABELS[key] for key in LABELS if key in item.get('labels', [])) or 'нет'
+            return self.preview(uid, copy.deepcopy(menu), 'Метки позиции: ' + item['name'] + '\n' + labels)
         if op == 'image': return self.image(uid, *args)
         if op == 'generation-settings': return self.generation_settings_open(uid, *args)
         if op == 'generation-settings-show': return self.generation_settings_show(uid, *args)

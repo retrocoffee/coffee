@@ -3,7 +3,7 @@ import re
 from html import escape
 from pathlib import Path
 from bot import carousel as selection
-from bot.menu import item_anchor, is_unavailable
+from bot.menu import item_anchor, is_unavailable, render_labels
 from scripts import seasonal
 
 
@@ -40,6 +40,7 @@ def render_carousel(menu):
 {picture}
 <div class="product-copy">
 <h3 class="product-name"><a class="product-link" href="#{item_anchor(section, group, item)}" aria-label="{escape(item['name'])} — посмотреть в меню">{escape(item['name'])}</a></h3>
+{render_labels(item)}
 <p class="product-description">{escape(description)}</p>
 <p class="product-meta"><span class="product-volume">{escape(volume)}</span><span class="product-price">{escape(item['prices'][variant])}</span></p>
 </div>

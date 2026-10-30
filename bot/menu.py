@@ -16,6 +16,15 @@ def is_unavailable(item):
 
 
 MENU_PATH = Path('data/menu.json')
+LABELS = {'hit': 'Хит', 'new': 'Новинка'}
+
+
+def render_labels(item):
+    labels = item.get('labels', [])
+    if not labels: return ''
+    return '<span class="item-labels">' + ''.join(
+        f'<span class="item-label">{LABELS[key]}</span>' for key in LABELS if key in labels) + '</span>'
+
 
 
 def validate(menu):
@@ -49,6 +58,11 @@ def validate(menu):
             ids(group['items'])
             for item in group['items']:
                 text(item['name'], 200)
+                labels = item.get('labels', [])
+                if (not isinstance(labels, list) or len(labels) > 2
+                        or any(not isinstance(label, str) or label not in LABELS for label in labels)
+                        or len(set(labels)) != len(labels)):
+                    raise ValueError('Метки: Хит и Новинка, без повторов.')
                 if 'unavailable_on' in item:
                     try: date.fromisoformat(item['unavailable_on'])
                     except (ValueError, TypeError): raise ValueError('Некорректная дата отсутствия позиции')
@@ -119,7 +133,7 @@ def render(menu):
                 image = escape(menu_image(section, group, item), quote=True)
                 badge = '<span class="availability-label"' + ('' if is_unavailable(item) else ' hidden') + '>Сегодня нет</span>'
                 day = escape(item.get('unavailable_on', ''), quote=True)
-                out.append(f'<tr id="{item_anchor(section, group, item)}" tabindex="-1" data-unavailable-on="{day}"><th scope="row"><div class="menu-item"><img class="menu-item-image" src="{image}" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">{escape(item["name"])}{badge}{notes}</div></div></th><td class="menu-prices">' + ''.join(variants) + '</td></tr>')
+                out.append(f'<tr id="{item_anchor(section, group, item)}" tabindex="-1" data-unavailable-on="{day}"><th scope="row"><div class="menu-item"><img class="menu-item-image" src="{image}" alt="" width="38" height="42" loading="lazy" decoding="async"><div class="menu-item-copy">{escape(item["name"])}{render_labels(item)}{badge}{notes}</div></div></th><td class="menu-prices">' + ''.join(variants) + '</td></tr>')
             out.append('</tbody></table>')
         out.append('</div></details>')
     return '\n'.join(out)

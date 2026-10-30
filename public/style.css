@@ -134,3 +134,8 @@ body.dialog-open{overflow:hidden}
 .item-description>summary:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 .item-description>summary::-webkit-details-marker{display:none}
 @media(max-width:600px){.menu-category>summary{padding:18px 0}.menu-item{gap:8px}.menu-item-image{flex-basis:28px;width:28px;height:34px}.price-table{font-size:14px}.menu-volume{font-size:10px}.menu-variant{gap:6px;font-size:13px}}
+
+/* Small editorial labels shared by menu entries and featured cards. */
+.item-labels{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:4px}
+.item-label{color:var(--red);font-size:10px;line-height:1.4;letter-spacing:.035em}
+.product-copy .item-labels{margin-top:3px}
