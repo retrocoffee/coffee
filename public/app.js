@@ -18,14 +18,15 @@ for (const category of categories) {
       itemNavigationCategory = null;
       return;
     }
-    // After the browser lays out the expanded category, bring its heading to the top.
-    requestAnimationFrame(() => {
+    // Wait for the previous section to collapse, then align the section itself.
+    // A sticky summary may already be at the viewport top while its list is scrolled.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if (!category.open) return;
-      category.querySelector('summary').scrollIntoView({
+      category.scrollIntoView({
         behavior: reduceMotion.matches ? 'auto' : 'smooth',
         block: 'start'
       });
-    });
+    }));
   });
 }
 

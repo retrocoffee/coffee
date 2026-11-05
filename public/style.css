@@ -139,3 +139,6 @@ body.dialog-open{overflow:hidden}
 .item-labels{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:4px}
 .item-label{color:var(--red);font-size:10px;line-height:1.4;letter-spacing:.035em}
 .product-copy .item-labels{margin-top:3px}
+
+/* Even a short final section can bring the start of its list to the screen top. */
+.menu-category[open]{min-height:100vh;min-height:100svh}
