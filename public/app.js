@@ -205,6 +205,7 @@ if (carousel) {
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     const hash = link.getAttribute('href');
+    window.RetroMetrics?.goal('carousel_item', { item: hash.slice(1) });
     if (location.hash !== hash) history.pushState(null, '', hash);
     revealMenuItem(hash);
   });

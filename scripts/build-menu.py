@@ -9,6 +9,7 @@ from bot.site import load as load_site
 from scripts.site import render_site
 from scripts import seasonal
 from bot import season
+from scripts.analytics import apply as apply_analytics
 from bot.responsive import build as build_responsive
 
 page = Path('public/index.html')
@@ -40,4 +41,4 @@ else:
     html, count = re.subn('<div class="end-line" aria-hidden="true"></div>', lambda _: footer, html)
 if count != 1:
     raise SystemExit('Expected exactly one site-info block in public/index.html')
-page.write_text(html)
+page.write_text(apply_analytics(html))

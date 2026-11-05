@@ -21,3 +21,6 @@ for (const match of html.matchAll(/srcset="([^"]+)"/g)) {
 assert(html.includes('http-equiv="Content-Security-Policy"'));
 assert(html.includes("script-src 'self'"));
 assert(html.includes('name="referrer" content="no-referrer"'));
+
+const counter = JSON.parse(readFileSync('config/analytics.json', 'utf8')).yandex_counter_id;
+assert.equal(html.includes('meta name="yandex-metrika-id"'), Number.isSafeInteger(counter) && counter > 0);

@@ -48,7 +48,7 @@ def render_site(profile):
 <div class="end-line" aria-hidden="true"></div>
 <nav class="footer-nav" aria-label="Информация о кофейне">
 <a class="footer-link" href="#social-dialog" data-open-dialog="social-dialog" aria-haspopup="dialog" aria-controls="social-dialog">{escape(profile['handle'])}</a>
-<a class="footer-link" href="{escape(profile['review_url'], quote=True)}" target="_blank" rel="noopener noreferrer">Оставить отзыв</a>
+<a class="footer-link" data-analytics-goal="review_click" href="{escape(profile['review_url'], quote=True)}" target="_blank" rel="noopener noreferrer">Оставить отзыв</a>
 <a class="footer-link" href="#about-dialog" data-open-dialog="about-dialog" aria-haspopup="dialog" aria-controls="about-dialog">О кофейне</a>
 </nav>
 </footer>

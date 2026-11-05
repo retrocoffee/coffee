@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "python3 -m unittest discover -s tests && python3 scripts/build-menu.py && node --check public/app.js && node scripts/check.mjs",
+    "check": "python3 -m unittest discover -s tests && python3 scripts/build-menu.py && node --check public/app.js && node --check public/analytics.js && node scripts/check.mjs",
     "start": "python3 scripts/build-menu.py && python3 -m http.server 4173 --directory public",
     "build": "python3 scripts/build-menu.py"
   }
